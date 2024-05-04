@@ -86,11 +86,57 @@ let rec item_index item l i
                   then i :: item_index item tl (i + 1)
                   else item_index item tl (i + 1)
 
+let rec item_list_has_correct_length (#a:eqtype) (l:list a) (i:nat)
+  : Lemma (ensures forall (item:a). length (item_index item l i) = count item l)
+  = match l with 
+    | [] -> ()
+    | hd :: tl -> item_list_has_correct_length tl (i + 1)
+
 let rec item_indices_is_in_interval (#a:eqtype) (item:a) (l:list a) (i:nat) (x:nat)
-  : Lemma (ensures mem x (item_index item l i) ==> i <= x)
+  : Lemma (ensures mem x (item_index item l i) ==> i <= x && x < i + length l)
   = match l with 
     | [] -> () 
     | hd :: tl -> item_indices_is_in_interval item tl (i + 1) x 
+
+let rec item_indices_one_and_item_indices_zero (#a:eqtype) (item:a) (l:list a) (x:nat{x > 0}) (i:nat{i > 0})
+  : Lemma (ensures mem x (item_index item l i) = mem (x - 1) (item_index item l (i - 1)))
+  = match l with 
+    | [] -> ()
+    | hd :: tl -> match x with 
+                  | 1 -> if i = 1
+                         then (
+                          if hd = item 
+                          then ()
+                          else (
+                           item_indices_is_in_interval item tl (i + 1) x;
+                           item_indices_is_in_interval item tl i (x - 1)
+                          )
+                         )
+                         else (
+                           item_indices_is_in_interval item l i x;
+                           item_indices_is_in_interval item l (i - 1) (x - 1)
+                         )
+                  | _ -> if i > x
+                         then (
+                          item_indices_is_in_interval item l i x;
+                          item_indices_is_in_interval item l (i - 1) (x - 1)
+                         )
+                         else (
+                          if i = x 
+                          then (
+                            if hd = item 
+                            then ()
+                            else (
+                             item_indices_is_in_interval item tl (i + 1) x;
+                             item_indices_is_in_interval item tl i (x - 1)
+                            )
+                          )
+                          else (
+                            assert(mem x (item_index item l i) = mem x (item_index item tl (i + 1)));
+                            assert(mem (x - 1) (item_index item l (i - 1)) = mem (x - 1) (item_index item tl i));
+                            item_indices_one_and_item_indices_zero item tl x (i + 1)
+                          )
+                         )
 
 let rec index_increases_with_one_when_element_is_added (#a:eqtype) (item:a) (l:list a) (i:nat{i > 0}) (el:a)
   : Lemma (ensures mem (i - 1) (item_index item l 0) = false ==> mem i (item_index item (el :: l) 0) = false)
@@ -99,17 +145,43 @@ let rec index_increases_with_one_when_element_is_added (#a:eqtype) (item:a) (l:l
     | hd :: tl -> match i with 
                   | 1 -> if hd = item 
                          then ()
-                         else (
-                          if el = item 
-                          then (
-                           
-                          )
-                         )
-                  | _ -> admit()
+                         else item_indices_is_in_interval item tl 2 1
+                  | _ -> item_indices_one_and_item_indices_zero item l i 1;
+                         index_increases_with_one_when_element_is_added item tl (i - 1) hd
 
-let lemma_aux3 (#a:eqtype) (item:a) (tl:list a) (i:nat{i > 0})
-  : Lemma (ensures mem (i - 1) (item_index item tl 0) = false ==> mem i (0 :: item_index item tl 1) = false)
-  = admit()
+let rec index_increases_with_one_when_first_is_item (#a:eqtype) (item:a) (l:list a) (i:nat{i > 0})
+  : Lemma (ensures mem (i - 1) (item_index item l 0) = false ==> mem i (0 :: item_index item l 1) = false)
+  = match l with 
+    | [] -> ()
+    | hd :: tl -> match i with 
+                  | 1 -> if hd = item 
+                         then ()
+                         else item_indices_is_in_interval item tl 2 1
+                  | _ -> item_indices_one_and_item_indices_zero item l i 1;
+                         index_increases_with_one_when_first_is_item item tl (i - 1)
+
+let rec index_is_not_item_is_not_mem_base (#a:eqtype) (l:list a) (item:a) (i:nat{i < length l})
+  : Lemma (ensures index l i <> item ==> mem i (item_index item l 0) = false)
+  = match l with
+    | [] -> ()
+    | hd :: tl -> match i with 
+                  | 0 -> if hd = item 
+                         then ()
+                         else item_indices_is_in_interval item tl (i + 1) i
+                  | _ -> if hd = item 
+                         then index_increases_with_one_when_first_is_item item tl i
+                         else index_increases_with_one_when_element_is_added item tl i hd;
+                         index_is_not_item_is_not_mem_base tl item (i - 1)
+
+let rec index_is_item_is_mem_base (#a:eqtype) (l:list a) (item:a) (i:nat{i < length l})
+  : Lemma (ensures index l i = item ==> mem i (item_index item l 0) = true)
+  = match l with
+    | [] -> ()
+    | hd :: tl -> match i with 
+                  | 0 -> if hd = item
+                         then ()
+                         else item_indices_is_in_interval item tl (i + 1) i
+                  | _ -> admit()
 
 let item_list_length_is_zero_if_the_list_length_is_zero (#a:eqtype) (l:list a)
   : Lemma (requires l = [])
@@ -166,12 +238,6 @@ let rec count_tail (#a:eqtype) (l:list a)
   = match l with
     | final -> ()
     | hd :: tl -> count_tail tl
-
-let rec item_list_has_correct_length (#a:eqtype) (l:list a) (i:nat)
-  : Lemma (ensures forall (item:a). length (item_index item l i) = count item l)
-  = match l with 
-    | [] -> ()
-    | hd :: tl -> item_list_has_correct_length tl (i + 1)
 
 let rec item_index_is_empty (#a:eqtype) (l:list a)
   : Lemma (ensures forall (item:a). (l = []) \/ (forall (i:nat{i < length l}). index l i <> item) ==> item_index item l 0 = [])
@@ -234,30 +300,6 @@ let rec index_is_or_is_not_item_is_or_is_not_mem (#a:eqtype) (l:list a)
   = match l with
     | [] -> ()
     | hd :: tl -> index_is_or_is_not_item_is_or_is_not_mem tl
-
-let rec index_is_not_item_is_not_mem_aux (#a:eqtype) (l:list a) (item:a) (i:nat{i < length l})
-  : Lemma (ensures index l i <> item ==> mem i (item_index item l 0) = false)
-  = match l with
-    | [] -> ()
-    | hd :: tl -> match i with 
-                  | 0 -> if hd = item 
-                         then ()
-                         else (
-                          //assert(item <> hd);
-                          //assert(index l i = hd);
-                          //assert(index l i <> item);
-                          //assert(item_index item l 0 = item_index item tl (i + 1));
-                          item_indices_is_in_interval item tl (i + 1) i
-                         )
-                  | _ -> //assert(index l i = index tl (i - 1));
-                         if hd = item 
-                         then 
-                         //assert(mem i (item_index item l 0) = mem i (0 :: item_index item tl 1));
-                         lemma_aux3 item tl i
-                         else 
-                         //assert(mem i (item_index item l 0) = mem i (item_index item tl 1));
-                         lemma_aux2 item tl i hd;
-                         index_is_not_item_is_not_mem_aux tl item (i - 1)
 
 let rec index_is_not_item_is_not_mem (#a:eqtype) (l:list a)
   : Lemma (ensures forall (item:a). forall (i:nat{i < length l}). index l i <> item ==> mem i (item_index item l 0) = false)
