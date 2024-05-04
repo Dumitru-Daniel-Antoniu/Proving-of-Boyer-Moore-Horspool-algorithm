@@ -1,5 +1,6 @@
 module Proof
 
+open FStar.Classical 
 open FStar.IO
 open FStar.Printf
 open FStar.List
@@ -94,305 +95,66 @@ let bc_length_is_positive = length_create_bc_is_positive alphabet_length
 let bc_length_is_alphabet = length_create_bc_is_i alphabet_length
 let bc_nth_element_is_minusone = index_n_bc_is_minusone alphabet_length
 
-val item_index (#a:eqtype) (item:a) (l:list a) (i:nat): list nat
+val item_index (#a:eqtype) (item:a) (l:list a) (i:nat{i <= length l}): Tot (i:int{i >= -1}) (decreases i)
 let rec item_index item l i
-  = match l with 
-      | [] -> []
-      | hd::tl -> if hd = item
-                  then i :: item_index item tl (i + 1)
-                  else item_index item tl (i + 1)
+  = match i with 
+    | 0 -> -1
+    | _ -> if index l (i - 1) = item
+           then (i - 1)
+           else item_index item l (i - 1)
 
-let item_list_length_is_zero_if_the_list_length_is_zero (#a:eqtype) (l:list a)
-  : Lemma (requires l = [])
-          (ensures forall (item:a). length (item_index item l 0) = 0)
-  = ()
-
-let item_head (#a:eqtype) (l:list a)
-  : Lemma (requires length l >= 1)
-          (ensures forall (item:a). length (item_index item [hd l] 0) <= 1)
-  = ()
-
-let rec item_head_not_equal (#a:eqtype) (l:list a)
-  : Lemma (requires length l >= 1)
-          (ensures forall (item:a). hd l <> item ==> length (item_index item [hd l] 0) = 0)
-  = match l with
-    | last -> ()
-    | hd :: tl -> item_head_not_equal tl
-
-let rec item_head_equal (#a:eqtype) (l:list a)
-  : Lemma (requires length l >= 1)
-          (ensures forall (item:a). hd l = item ==> length (item_index item [hd l] 0) = 1)
-  = match l with
-    | last -> ()
-    | hd :: tl -> item_head_equal tl
-
-let rec item_head_count (#a:eqtype) (l:list a)
-  : Lemma (requires length l >= 1) 
-          (ensures forall (item:a). length (item_index item [hd l] 0) = count item [hd l])
-  = match l with 
-    | last -> ()
-    | hd :: tl -> item_head_count tl
-
-let item_empty_list_count (a:eqtype)
-  : Lemma (ensures forall (item:a). length (item_index item [] 0) = count item [])
-  = ()
-
-let rec item_tail_count (#a:eqtype) (l:list a)
-  : Lemma (requires length l >= 1) 
-          (ensures forall (item:a). length (item_index item (tl l) 0) = count item (tl l))
-  = match l with 
-    | last -> admit()
-    | hd :: tl -> admit(item_tail_count tl)
-
-let rec item_tail (#a:eqtype) (l:list a)
-  : Lemma (requires length l >= 1)
-          (ensures forall (item:a). length (item_index item l 0) = length (item_index item [hd l] 0) + length (item_index item (tl l) 1))
-  = match l with 
-    | final -> ()
-    | hd :: tl -> item_tail tl
-
-let rec count_tail (#a:eqtype) (l:list a)
-  : Lemma (requires length l >= 1)
-          (ensures forall (item:a). count item l = count item [hd l] + count item (tl l))
-  = match l with
-    | final -> ()
-    | hd :: tl -> count_tail tl
-
-let rec item_list_has_correct_length (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). length (item_index item l 0) = count item l)
-  = match l with 
-    | [] -> ()
-    | hd :: tl -> item_list_has_correct_length tl
-
-let rec item_index_is_empty (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). (l = []) \/ (forall (i:nat{i < length l}). index l i <> item) ==> item_index item l 0 = [])
-  = match l with
-    | [] -> ()
-    | hd :: tl -> admit(item_index_is_empty tl)
-
-// let rec reunite_the_list (#a:eqtype) (l:list a)
-//   : Lemma (requires length l >= 1)
-//           (ensures l = append [hd l] (tl l))
-//   = match l with 
-//     | final -> ()
-//     | hd :: tl -> reunite_the_list tl
-
-let rec item_tail_not_equal (#a:eqtype) (l:list a)
-  : Lemma (requires length l >= 1)
-          (ensures forall (item:a). item_index item l 0 = append (item_index item [hd l] 0) (item_index item (tl l) 1))
-  = match l with
-    | final -> ()
-    | hd :: tl -> item_tail_not_equal tl
-
-let rec item_list_has_length_at_least_zero (#a:eqtype) (l:list a) 
-  : Lemma (ensures forall (item:a). length (item_index item l 0) >= 0)
-  = match l with
-    | [] -> ()
-    | hd :: tl -> item_list_has_length_at_least_zero tl
-
-let rec item_has_at_most_length_l_occurrences (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). count item l <= length l)
-  = match l with 
-    | [] -> ()
-    | hd :: tl -> item_has_at_most_length_l_occurrences tl
-
-//correct store of indexes
-
-let rec exists_item_zero_then_correct_index (#a:eqtype) (l:list a)
+let length_tail_is_last_index (#a:eqtype) (l:list a) 
   : Lemma (requires length l > 0)
-          (ensures forall (item:a).  index l 0 = item ==> mem 0 (item_index item l 0))
-  = match l with
-    | [last] -> ()
-    | hd :: tl -> exists_item_zero_then_correct_index tl
+          (ensures length l = 1 + length (tl l))
+  = ()
 
-let rec exists_item_one_then_correct_index (#a:eqtype) (l:list a)
-  : Lemma (requires length l > 1)
-          (ensures forall (item:a).  index l 1 = item ==> mem 1 (item_index item l 0))
-  = match length l with
-    | 2 -> ()
-    | _ -> exists_item_one_then_correct_index (tl l)
+let mem_index_range_index_is_item (#a:eqtype) (l:list a)
+  : Lemma (requires length l <= 7) //from 8 it doesn't work
+          (ensures forall (item:a).
+          (let i = item_index item l (length l) in
+           i <> -1 && i < length l ==> index l i = item))
+  = ()
 
-let rec exists_item_i_then_correct_index (#a:eqtype) (l:list a) (i:nat)
-  : Lemma (requires length l > i)
-          (ensures forall (item:a). index l i = item ==> mem i (item_index item l 0))
-  = let j = i + 1 in
-    match length l with
-    | j -> admit()
-    | _ -> exists_item_i_then_correct_index (tl l) i
+let item_not_found_returns_minusone_specific_element (#a:eqtype) (l:list a)
+  : Lemma (requires length l <= 6) //from 7 it doesn't work
+          (ensures forall (item:a). item_index item l (length l) = -1 ==> (forall (i:nat{i < length l}). index l i <> item))
+  = ()
 
-let rec index_is_or_is_not_item_is_or_is_not_mem (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). forall (i:nat{i < length l}). (index l i = item || index l i <> item) ==> (mem i (item_index item l 0) = true || mem i (item_index item l 0) = false))
-  = match l with
-    | [] -> ()
-    | hd :: tl -> index_is_or_is_not_item_is_or_is_not_mem tl
+let one_index_not_item (#a:eqtype) (item:a) (l:list a) (i:nat{i < length l})
+  : Type
+  = index l i <> item
 
-let rec index_is_not_item_is_not_mem (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). forall (i:nat{i < length l}). index l i <> item ==> mem i (item_index item l 0) = false)
+let item_not_found_returns_minusone_one_index (#a:eqtype) (item:a) (l:list a) (i:nat{i < length l})
+  : Lemma (requires item_index item l (length l) = -1)
+          (ensures one_index_not_item item l ((length l) - 1))
+  = ()
+
+let rec item_not_found_item_not_found_less_indexes (#a:eqtype) (l:list a)
+  : Lemma (ensures forall (item:a). item_index item l (length l) = -1 ==> (forall (i:nat{i < length l}). item_index item l i = -1))
   = match l with
     | [] -> ()
-    | hd :: tl -> admit(index_is_not_item_is_not_mem tl)
+    | hd :: tl -> item_not_found_item_not_found_less_indexes tl
 
-let rec exists_item_then_correct_index (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). forall (i:nat{i < length l}). index l i = item ==> mem i (item_index item l 0))
+let rec item_not_found_returns_minusone (#a:eqtype) (l:list a)
+  : Lemma (ensures forall (item:a). item_index item l (length l) = -1 ==> (forall (i:nat{i < length l}). one_index_not_item i))
   = match l with
     | [] -> ()
-    | hd :: tl -> admit(exists_item_then_correct_index tl)
+    | hd :: tl -> admit(item_not_found_returns_minusone tl);
+                  item_not_found_returns_minusone_one_index l
 
-let rec correct_index_then_exists_item (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). forall (i:nat{i < length l}). mem i (item_index item l 0) ==> index l i = item)
+let item_found_returns_nat (#a:eqtype) (l:list a)
+  : Lemma (ensures forall (item:a). 
+          (let i = item_index item l (length l) in
+           i <> -1 ==> i >= 0))
+  = ()
+
+let rec item_found_returns_index (#a:eqtype) (l:list a)
+  : Lemma (ensures forall (item:a). 
+          (let i = item_index item l (length l) in
+           i <> -1 && i < length l ==> index l i = item))
   = match l with
     | [] -> ()
-    | hd :: tl -> admit(correct_index_then_exists_item tl)
-
-let rec exists_item_index_iff_correct_index (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). forall (i:nat{i < length l}). index l i = item <==> mem i (item_index item l 0))
-  = match l with
-    | [] -> ()
-    | hd :: tl -> exists_item_index_iff_correct_index tl;
-                  exists_item_then_correct_index l;
-                  correct_index_then_exists_item l
-
-let rec index_is_in_interval (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). forall (i:nat). mem i (item_index item l 0) = true ==> i >= 0 && i < length l)
-  = match l with 
-    | [] -> ()
-    | hd :: tl -> admit(index_is_in_interval tl)
-
-let rec last_is_in_interval (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). item_index item l 0 <> [] ==> last (item_index item l 0) >= 0 && last (item_index item l 0) < length l)
-  = match l with
-    | [] -> ()
-    | hd :: tl -> admit(last_is_in_interval tl)
-
-let new_or_old (#a:eqtype) (c:a) (l:list a) : int
-  = if item_index c l 0 <> []
-    then last (item_index c l 0)
-    else -1
-
-let rec not_new_or_old_empty_list (#a:eqtype) (l:list a) 
-  : Lemma (ensures forall (item:a). new_or_old item l = -1 ==> item_index item l 0 = [])
-  = match l with
-    | [] -> ()
-    | hd :: tl -> not_new_or_old_empty_list tl 
-
-let rec empty_list_length_zero (#a:eqtype) (l:list a) 
-  : Lemma (ensures forall (item:a). item_index item l 0 = [] ==> length (item_index item l 0) = 0)
-  = match l with 
-    | [] -> ()
-    | hd :: tl -> empty_list_length_zero tl
-
-//make the lemma without admit
-let rec length_zero_count_zero (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). length (item_index item l 0) = 0 ==> count item l = 0)
-  = match l with
-    | [] -> ()
-    | hd :: tl -> length_zero_count_zero tl;
-                  item_list_has_correct_length l
-
-let rec count_zero_mem_false (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). count item l = 0 ==> mem item l = false)
-  = match l with
-    | [] -> ()
-    | hd :: tl -> count_zero_mem_false tl
-                 
-let rec mem_false_not_item (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). mem item l = false ==> (forall (i:nat). i < length l ==> index l i <> item))
-  = match l with 
-    | [] -> ()
-    | hd :: tl -> mem_false_not_item tl
-
-let rec new_or_old_not_item (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). new_or_old item l = -1 ==> (forall (i:nat). i < length l ==> index l i <> item))
-  = match l with
-    | [] -> ()
-    | hd :: tl -> new_or_old_not_item tl;
-                  not_new_or_old_empty_list l;
-                  empty_list_length_zero l;
-                  length_zero_count_zero l;
-                  count_zero_mem_false l;
-                  mem_false_not_item l
-
-let rec new_or_old_not_empty_list (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). new_or_old item l <> -1 ==> item_index item l 0 <> [])
-  = match l with
-    | [] -> ()
-    | hd :: tl -> new_or_old_not_empty_list tl
-
-let rec not_empty_list_length_greater_than_zero (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). (item_index item l 0 <> [] && last (item_index item l 0) < length l) ==> last (item_index item l 0) >= 0)
-  = match l with
-    | [] -> ()
-    | hd :: tl -> not_empty_list_length_greater_than_zero tl                  
-
-let rec last_list_mem (#a:eqtype) (l:list a)
-  : Lemma (requires length l > 0)
-          (ensures mem (last l) l = true)
-  = match l with
-    | [hd] -> ()
-    | hd :: tl -> last_list_mem tl
-
-let length_greater_than_zero_mem (#a:eqtype) (l:list a) (item:a)
-  : Lemma (requires item_index item l 0 <> [])
-          (ensures last (item_index item l 0) >= 0 ==> mem (last (item_index item l 0)) (item_index item l 0) = true)
-  = last_list_mem (item_index item l 0)
-
-let mem_index_is_item (#a:eqtype) (l:list a) (item:a)
-  : Lemma (requires item_index item l 0 <> [] && last (item_index item l 0) < length l)
-          (ensures mem (last (item_index item l 0)) (item_index item l 0) = true ==> index l (last (item_index item l 0)) = item)
-  = exists_item_index_iff_correct_index l;
-    ()
-
-let new_or_old_not_empty_list_correct_item (#a:eqtype) (l:list a) (item:a)
-  : Lemma (requires item_index item l 0 <> [] && last (item_index item l 0) < length l)
-          (ensures new_or_old item l <> -1 ==> index l (last (item_index item l 0)) = item)
-  = new_or_old_not_empty_list l;
-    not_empty_list_length_greater_than_zero l;
-    length_greater_than_zero_mem l item;
-    mem_index_is_item l item;
-    ()
-
-val update_bc (a:list english_letters) : list int
-let rec update_bc a = 
-    match a with 
-        | [] -> []
-        | hd::tl -> (new_or_old hd pattern) :: update_bc tl
-
-let final_bc : list int = update_bc alphabet
-
-let rec final_bc_length_is_alphabet_length (a:list english_letters)
-  : Lemma (ensures length (update_bc a) = length a)
-  = match a with
-      | [] -> ()
-      | hd :: tl -> final_bc_length_is_alphabet_length tl
-
-// let rec element_not_minusone_is_part_of_the_pattern (i:nat{i < length final_bc})
-//   : Lemma (requires i < length alphabet)
-//           (ensures index final_bc i <> -1 ==> item_index (index alphabet i) (rev pattern) 0 <> -1)
-//   = match i with 
-//       | 0 -> ()
-//       | _ -> element_not_minusone_is_part_of_the_pattern (i - 1)
-
-// let rec element_not_minusone_is_in_interval (i:nat{i < length final_bc})
-//   : Lemma (ensures index final_bc i <> -1 ==> index final_bc i >= 0 && index final_bc i < length pattern)
-//   = match i with 
-//       | 0 -> ()
-//       | _ -> final_bc_length_is_alphabet_length alphabet;
-//              pattern_elements_are_in_interval 0 (index alphabet i);
-//              element_not_minusone_is_in_interval (i - 1)
-
-// let rec last_index_of_character_versus_the_next_character (i:nat) 
-//   : Lemma (requires i < length final_bc) 
-//           (ensures (index final_bc i <> -1 && i + 1 < length pattern) ==> index pattern (i + 1) <> index alphabet i)
-//   = match i with
-//       | 0 -> ()
-//       | _ -> last_index_of_character_versus_the_next_character (i - 1)
-
-// let rec last_index_of_character_stored_correctly (i:nat)
-//   : Lemma (requires i < length final_bc)
-//           (ensures index final_bc i <> -1 ==> (forall j. j > i && j < length final_bc ==> index pattern j <> index alphabet i))
-//   = match i with
-//       | 0 -> ()
-//       | _ -> last_index_of_character_stored_correctly (i - 1) 
+    | hd :: tl -> item_found_returns_index tl
 
 //good suffix part
 val first_characters (l:list english_letters) (j:nat{j >= 0}) : list english_letters
@@ -528,7 +290,7 @@ let string_of_int_list l =
 
 let main() =
   let message =
-     sprintf "The result is %d\n" (new_or_old J (rev pattern))
+     sprintf "The result is %d\n" (item_index A pattern (length (tl pattern)))
   in
   print_string message
 
