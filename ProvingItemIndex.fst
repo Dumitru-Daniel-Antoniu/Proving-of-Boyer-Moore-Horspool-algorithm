@@ -149,6 +149,17 @@ let rec index_increases_with_one_when_element_is_added (#a:eqtype) (item:a) (l:l
                   | _ -> item_indices_one_and_item_indices_zero item l i 1;
                          index_increases_with_one_when_element_is_added item tl (i - 1) hd
 
+let rec index_increases_with_one_when_element_is_added_for_true (#a:eqtype) (item:a) (l:list a) (i:nat{i > 0}) (el:a)
+  : Lemma (ensures mem (i - 1) (item_index item l 0) = true ==> mem i (item_index item (el :: l) 0) = true)
+  = match l with 
+    | [] -> ()
+    | hd :: tl -> match i with 
+                  | 1 -> if hd = item 
+                         then ()
+                         else item_indices_is_in_interval item tl i (i - 1)
+                  | _ -> item_indices_one_and_item_indices_zero item l i 1;
+                         index_increases_with_one_when_element_is_added_for_true item tl (i - 1) hd
+
 let rec index_increases_with_one_when_first_is_item (#a:eqtype) (item:a) (l:list a) (i:nat{i > 0})
   : Lemma (ensures mem (i - 1) (item_index item l 0) = false ==> mem i (0 :: item_index item l 1) = false)
   = match l with 
@@ -159,6 +170,17 @@ let rec index_increases_with_one_when_first_is_item (#a:eqtype) (item:a) (l:list
                          else item_indices_is_in_interval item tl 2 1
                   | _ -> item_indices_one_and_item_indices_zero item l i 1;
                          index_increases_with_one_when_first_is_item item tl (i - 1)
+
+let rec index_increases_with_one_when_first_is_item_for_true (#a:eqtype) (item:a) (l:list a) (i:nat{i > 0})
+  : Lemma (ensures mem (i - 1) (item_index item l 0) = true ==> mem i (0 :: item_index item l 1) = true)
+  = match l with 
+    | [] -> ()
+    | hd :: tl -> match i with 
+                  | 1 -> if hd = item 
+                         then ()
+                         else item_indices_is_in_interval item tl i (i - 1)
+                  | _ -> item_indices_one_and_item_indices_zero item l i 1;
+                         index_increases_with_one_when_first_is_item_for_true item tl (i - 1)
 
 let rec index_is_not_item_is_not_mem_base (#a:eqtype) (l:list a) (item:a) (i:nat{i < length l})
   : Lemma (ensures index l i <> item ==> mem i (item_index item l 0) = false)
@@ -181,6 +203,78 @@ let rec index_is_item_is_mem_base (#a:eqtype) (l:list a) (item:a) (i:nat{i < len
                   | 0 -> if hd = item
                          then ()
                          else item_indices_is_in_interval item tl (i + 1) i
+                  | _ -> assert(index l i = index tl (i - 1));
+                         if hd = item
+                         then index_increases_with_one_when_first_is_item_for_true item tl i 
+                         else index_increases_with_one_when_element_is_added_for_true item tl i hd;
+                         index_is_item_is_mem_base tl item (i - 1)
+
+let rec mem_index_element (#a:eqtype) (l:list a) (i:nat{i < length l})
+  : Lemma (ensures mem (index l i) l = true)
+  = match l with 
+    | [] -> ()
+    | hd :: tl -> match i with
+                  | 0 -> ()
+                  | _ -> mem_index_element tl (i - 1)
+
+let rec index_not_zero_not_first_element (#a:eqtype) (l:list a) (item:a) (m:nat) (i:nat{i < length (item_index item l m)})
+  : Lemma (requires length (item_index item l m) > 1)
+          (ensures 
+           (let indices = item_index item l m in
+            i <> 0 ==> index indices i <> hd indices))
+  = match l with 
+    | [] -> ()
+    | fst :: tl -> if fst = item 
+                   then (
+                    assert(hd (item_index item l m) = m);
+                    assert(item_index item l m = m :: (item_index item tl (m + 1)));
+                    match i with 
+                    | 0 -> ()
+                    | _ -> mem_index_element (item_index item tl (m + 1)) (i - 1);
+                           item_indices_is_in_interval item tl (m + 1) (index (item_index item tl (m + 1)) (i - 1))
+                   )
+                   else index_not_zero_not_first_element tl item (m + 1) i
+
+let hd_item_indices_is_min (#a:eqtype) (l:list a) (item:a) (i:nat)
+  : Lemma (requires length (item_index item l 0) > 1)
+          (ensures 
+           (let indices = item_index item l 0 in 
+            mem i indices && i <> hd indices ==> i > hd indices))
+  = admit()
+
+let rec indices_are_ordered_in_ascending_order (#a:eqtype) (l:list a) (item:a) (i:nat) (j:nat)
+  : Lemma (requires i < length (item_index item l 0) && j < length (item_index item l 0) && i < j)
+          (ensures 
+           (let indices = item_index item l 0 in
+            index indices i < index indices j))
+  = match l with 
+    | [] -> ()
+    | fst :: tl -> match i with 
+                  | 0 -> if fst = item 
+                         then (
+                          // assert(item_index item l 0 = 0 :: item_index item tl 1);
+                          // assert(index (item_index item l 0) i = 0);
+                          // assert(index (item_index item l 0) j = index (item_index item tl 1) (j - 1));
+                          mem_index_element (item_index item tl 1) (j - 1);
+                          item_indices_is_in_interval item tl 1 (index (item_index item tl 1) (j - 1))
+                         )
+                         else (
+                          assert(item_index item l 0 = item_index item tl 1);
+                          assert(index (item_index item l 0) i = index (item_index item tl 1) i);
+                          assert(index (item_index item l 0) j = index (item_index item tl 1) j);
+                          assert(index (item_index item tl 1) i = hd (item_index item tl 1));
+                          assert(j > 0);
+                          assert(j <> i);
+                          //assert(index (item_index item tl 1) j <> hd (item_index item tl 1));
+                          //assert(index (item_index item tl 1) j = index (item_index item (tail tl) 2) (j - 1));
+                          if length (item_index item tl 1) < 2
+                          then ()
+                          else (
+                            mem_index_element (item_index item l 0) j;
+                            index_not_zero_not_first_element l item 0 j;
+                            hd_item_indices_is_min l item (index (item_index item l 0) j)
+                          )
+                         )
                   | _ -> admit()
 
 let item_list_length_is_zero_if_the_list_length_is_zero (#a:eqtype) (l:list a)
@@ -418,9 +512,9 @@ let length_greater_than_zero_mem (#a:eqtype) (item:a) (l:list a)
           (ensures implication_last_is_in_list item l) 
   = last_list_mem (item_index item l 0)
 
-let length_greater_than_zero_mem_forall (#a:eqtype) (l:list a)
-  : Lemma (ensures forall (item:a). item_index_not_empty ==> implication_last_is_in_list item l)
-  = forall_intro (move_requires (length_greater_than_zero_mem item) l)
+// let length_greater_than_zero_mem_forall (#a:eqtype) (l:list a)
+//   : Lemma (ensures forall (item:a). item_index_not_empty ==> implication_last_is_in_list item l)
+//   = forall_intro (move_requires (length_greater_than_zero_mem item) l)
 
 let mem_index_is_item (#a:eqtype) (l:list a) (item:a)
   : Lemma (requires item_index item l 0 <> [] && last (item_index item l 0) < length l)
