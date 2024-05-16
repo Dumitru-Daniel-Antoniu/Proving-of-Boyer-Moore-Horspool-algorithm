@@ -331,6 +331,7 @@ let rec item_map_subtraction (l:list nat) (i:nat{i < length l})
                   | 0 -> ()
                   | _ -> item_map_subtraction tl (i - 1)
 
+//item_indices item l m
 let rec indices_are_ordered_in_ascending_order (#a:eqtype) (l:list a) (item:a) (i:nat) (j:nat)
   : Lemma (requires i < length (item_index item l 0) && j < length (item_index item l 0) && i < j)
           (ensures 
@@ -552,14 +553,14 @@ let mem_index_is_item_last_indices_are_not_item (#a:eqtype) (item:a) (l:list a{i
 // let mem_index_is_item_gives_correct_result (#a:eqtype) (item:a) (l:list a{item_index item l 0 <> []})
 //   : Lemma (ensures mem (last (item_index item l 0)) (item_index item l 0) = true ==> (forall (i:nat{i > (last (item_index item l 0)) && i < length l}). index l i <> item))
 
-let new_or_old_not_empty_list_correct_item (#a:eqtype) (l:list a) (item:a)
-  : Lemma (requires item_index item l 0 <> [] && last (item_index item l 0) < length l)
-          (ensures new_or_old item l <> -1 ==> index l (last (item_index item l 0)) = item)
-  = new_or_old_not_empty_list l;
-    not_empty_list_length_greater_than_zero l;
-    length_greater_than_zero_mem item l;
-    mem_index_is_item l item;
-    ()
+// let new_or_old_not_empty_list_correct_item (#a:eqtype) (l:list a) (item:a)
+//   : Lemma (requires item_index item l 0 <> [] && last (item_index item l 0) < length l)
+//           (ensures new_or_old item l <> -1 ==> index l (last (item_index item l 0)) = item)
+//   = new_or_old_not_empty_list l;
+//     not_empty_list_length_greater_than_zero l;
+//     length_greater_than_zero_mem item l;
+//     mem_index_is_item l item;
+//     ()
 
 val update_bc (a:list english_letters) : list int
 let rec update_bc a = 
@@ -600,6 +601,12 @@ let update_bc_has_index_minusone_if_letter_is_not_in_pattern (l:list english_let
             index l' i = -1 ==> index pattern j <> index l i)))
   = forall_intro (update_bc_has_index_minusone_if_letter_is_not_in_pattern_forall_j l)
 
-
-
 let final_bc : list int = update_bc alphabet
+
+let rec belongs (t:list english_letters) (p:list english_letters{length p < length t}) (i:nat{i <= (length t) - (length p)})
+  : bool 
+  = match p with
+    | [] -> true
+    | hd :: tl -> if hd = index t i 
+                  then belongs t tl (i + 1)
+                  else false
