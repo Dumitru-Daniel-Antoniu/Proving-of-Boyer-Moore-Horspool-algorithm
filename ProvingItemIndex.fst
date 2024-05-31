@@ -34,14 +34,14 @@ type english_letters =
   | Y 
   | Z
 
-val alphabet : list english_letters 
+val alphabet : (l:list english_letters{l <> []})
 let alphabet = [A;B;C;D;E;F;G;H;I;J;K;M;N;O;P;Q;R;S;T;U;V;W;X;Y;Z]
   
-val text : list english_letters
-let text = [E;A;A;A;X;A;B;X;A;A;X;B;A;X;B;A;A;A;B;A;B;B]
+val text : (l:list english_letters{l <> []})
+let text = [A;A;A;A;B;A;A;B;A;B;A;A;A;B;A;B;B]
 
 val pattern : list english_letters
-let pattern = [E;A;A;A;X;E;C;F;C]
+let pattern = [A;B;B]
 
 val alphabet_length : (i:nat{i > 0})
 let alphabet_length = length alphabet
@@ -97,6 +97,10 @@ let rec item_indices_is_in_interval (#a:eqtype) (item:a) (l:list a) (i:nat) (x:n
   = match l with 
     | [] -> () 
     | hd :: tl -> item_indices_is_in_interval item tl (i + 1) x 
+
+let item_indices_is_in_interval_forall (#a:eqtype) (item:a) (l:list a) (i:nat)
+  : Lemma (ensures forall (x:nat). mem x (item_index item l i) ==> i <= x && x < i + length l)
+  = forall_intro (item_indices_is_in_interval item l i)
 
 let rec item_indices_one_and_item_indices_zero (#a:eqtype) (item:a) (l:list a) (x:nat{x > 0}) (i:nat{i > 0})
   : Lemma (ensures mem x (item_index item l i) = mem (x - 1) (item_index item l (i - 1)))
@@ -486,11 +490,11 @@ let not_empty_list_length_greater_than_zero (#a:eqtype) (l:list a)
   : Lemma (ensures forall (item:a). item_index item l 0 <> [] ==> mem (last (item_index item l 0)) (item_index item l 0) = true)
   = forall_intro (not_empty_list_length_greater_than_zero_base l)
  
-let mem_index_is_item_base (#a:eqtype) (item:a) (l:list a)
+let mem_index_is_item (#a:eqtype) (item:a) (l:list a)
   : Lemma (requires item_index item l 0 <> [] && last (item_index item l 0) < length l)
           (ensures mem (last (item_index item l 0)) (item_index item l 0) = true ==> index l (last (item_index item l 0)) = item)
   = mem_last_list (item_index item l 0);
-    index_is_mem_is_item l 
+    index_is_mem_is_item l
 
 let rec index_plus_one_base (#a:eqtype) (l:list a) (item:a) (el:a) (i:nat{i < length l})
   : Lemma (ensures index l i = item ==> index (el :: l) (i + 1) = item)
@@ -550,18 +554,35 @@ let mem_index_is_item_last_indices_are_not_item (#a:eqtype) (item:a) (l:list a{i
   : Lemma (ensures mem (last (item_index item l 0)) (item_index item l 0) = true ==> (forall (i:nat{i > (last (item_index item l 0)) && i < length l}). index l i <> item))
   = forall_intro (index_greater_than_last_not_item item l)
 
-// let mem_index_is_item_gives_correct_result (#a:eqtype) (item:a) (l:list a{item_index item l 0 <> []})
-//   : Lemma (ensures mem (last (item_index item l 0)) (item_index item l 0) = true ==> (forall (i:nat{i > (last (item_index item l 0)) && i < length l}). index l i <> item))
+let mem_index_is_item_gives_correct_result (#a:eqtype) (l:list a) (item:a)
+  : Lemma (requires item_index item l 0 <> [] && (last (item_index item l 0)) < length l)
+          (ensures mem (last (item_index item l 0)) (item_index item l 0) = true ==> index l (last (item_index item l 0)) = item /\ 
+          (forall (i:nat{i > (last (item_index item l 0)) && i < length l}). index l i <> item))
+  = mem_index_is_item item l;
+    mem_index_is_item_last_indices_are_not_item item l
 
-// let new_or_old_not_empty_list_correct_item (#a:eqtype) (l:list a) (item:a)
-//   : Lemma (requires item_index item l 0 <> [] && last (item_index item l 0) < length l)
-//           (ensures new_or_old item l <> -1 ==> index l (last (item_index item l 0)) = item)
-//   = new_or_old_not_empty_list l;
-//     not_empty_list_length_greater_than_zero l;
-//     length_greater_than_zero_mem item l;
-//     mem_index_is_item l item;
-//     ()
+let new_or_old_not_empty_list_correct_item_base (#a:eqtype) (l:list a) (item:a)
+  : Lemma (requires item_index item l 0 <> [] && last (item_index item l 0) < length l)
+          (ensures new_or_old item l <> -1 ==> index l (last (item_index item l 0)) = item /\ 
+          (forall (i:nat{i > (last (item_index item l 0)) && i < length l}). index l i <> item))
+  = new_or_old_not_empty_list l;
+    not_empty_list_length_greater_than_zero l;
+    mem_index_is_item_gives_correct_result l item
 
+let new_or_old_not_empty_list_correct_item_implication (#a:eqtype) (l:list a) (item:a)
+  : Lemma (ensures (item_index item l 0 <> [] && last (item_index item l 0) < length l) ==> 
+                   (new_or_old item l <> -1 ==> index l (last (item_index item l 0)) = item /\
+                   (forall (i:nat{i > (last (item_index item l 0)) && i < length l}). index l i <> item)))
+  = if item_index item l 0 = []
+    then ()
+    else (
+      mem_last_list (item_index item l 0);
+      item_indices_is_in_interval_forall item l 0;
+      assert(item_index item l 0 <> [] && last (item_index item l 0) < length l);
+      // move_requires (new_or_old_not_empty_list_correct_item_base l) item
+      admit()
+    )
+    
 val update_bc (a:list english_letters) : list int
 let rec update_bc a = 
     match a with 
@@ -574,7 +595,8 @@ let rec update_bc_length_is_initial_list_length (l:list english_letters)
     | [] -> ()
     | hd :: tl -> update_bc_length_is_initial_list_length tl
 
-let rec update_bc_has_index_minusone_if_letter_is_not_in_pattern_base (l:list english_letters) (i:nat{i < length l && i < length (update_bc l)}) (j:nat{j < length pattern})
+let rec update_bc_has_index_minusone_if_letter_is_not_in_pattern_base (l:list english_letters) 
+                                                                      (i:nat{i < length l && i < length (update_bc l)}) (j:nat{j < length pattern})
   : Lemma (ensures 
            (let l' = update_bc l in
             index l' i = -1 ==> index pattern j <> index l i))
@@ -601,12 +623,696 @@ let update_bc_has_index_minusone_if_letter_is_not_in_pattern (l:list english_let
             index l' i = -1 ==> index pattern j <> index l i)))
   = forall_intro (update_bc_has_index_minusone_if_letter_is_not_in_pattern_forall_j l)
 
+let rec update_bc_has_correct_index_if_letter_is_in_pattern_base (l:list english_letters) 
+                                                                 (i:nat{i < length l && i < length (update_bc l)}) (j:nat{j < length pattern})
+  : Lemma (ensures 
+           (let l' = update_bc l in
+            index l' i = j ==> index pattern j = index l i /\ (forall (i':nat{i' > i && i' < length pattern}). index pattern i' <> index l i)))
+  = update_bc_length_is_initial_list_length l;
+    match l with 
+    | [] -> ()
+    | fst :: tl -> match i with 
+                   | 0 -> assert(update_bc l = (new_or_old fst pattern) :: update_bc tl);
+                          assert(index (update_bc l) i = new_or_old fst pattern);
+                          assert(fst = index l i);
+                          if j = new_or_old fst pattern
+                          then (
+                            if item_index (index l i) l 0 <> [] && last (item_index (index l i) l 0) < length l
+                            then new_or_old_not_empty_list_correct_item_base pattern fst
+                            else admit()
+                          )
+                          else ()
+                   | _ -> update_bc_has_correct_index_if_letter_is_in_pattern_base tl (i - 1) j
+
 let final_bc : list int = update_bc alphabet
 
-let rec belongs (t:list english_letters) (p:list english_letters{length p < length t}) (i:nat{i <= (length t) - (length p)})
+let final_bc_has_same_length_as_alphabet () 
+  : Lemma (ensures length final_bc = length alphabet)
+  = update_bc_length_is_initial_list_length alphabet
+
+let rec belongs (t:list english_letters) (p:list english_letters{length p <= length t}) (i:nat)
   : bool 
   = match p with
     | [] -> true
-    | hd :: tl -> if hd = index t i 
+    | hd :: tl -> if i < length t && hd = index t i 
                   then belongs t tl (i + 1)
                   else false
+
+let rec belongs_true_index_is_equal_base (t:list english_letters) (p:list english_letters{length p <= length t}) (i:nat{i <= length t - length p}) (j:nat{j >= i && j < i + length p})
+  : Lemma (ensures belongs t p i = true ==> index t j = index p (j - i))
+  = match p with 
+    | [] -> ()
+    | hd :: tl -> if hd = index t i 
+                  then (
+                    assert(belongs t p i = belongs t tl (i + 1));
+                    if i < j 
+                    then belongs_true_index_is_equal_base t tl (i + 1) j
+                    else ()
+                  )
+                  else ()
+
+let belongs_true_indices_are_equal (t:list english_letters) (p:list english_letters{length p <= length t})
+  : Lemma (ensures forall (i:nat{i <= length t - length p}) (j:nat{j >= i && j < i + length p}). belongs t p i = true ==> index t j = index p (j - i))
+  = forall_intro_2 (belongs_true_index_is_equal_base t p)
+
+let rec belongs_false_index_is_not_equal_base (t:list english_letters) (p:list english_letters{length p <= length t}) (i:nat{i <= length t - length p}) 
+  : Lemma (ensures belongs t p i = false ==> (exists (j:nat{j >= i && j < i + length p}). index t j <> index p (j - i)))
+  = match p with 
+    | [] -> ()
+    | hd :: tl -> if hd = index t i 
+                  then belongs_false_index_is_not_equal_base t tl (i + 1)
+                  else ()
+
+let belongs_false_index_is_not_equal (t:list english_letters) (p:list english_letters{length p <= length t})
+  : Lemma (ensures forall (i:nat{i <= length t - length p}) . belongs t p i = false ==> (exists (j:nat{j >= i && j < i + length p}). index t j <> index p (j - i)))
+  = forall_intro (belongs_false_index_is_not_equal_base t p)
+
+let rec index_is_not_equal_belongs_false_base (t:list english_letters) (p:list english_letters{length p <= length t}) (i:nat{i <= length t - length p})
+  : Lemma (ensures (exists (j:nat{j >= i && j < i + length p}). index t j <> index p (j - i)) ==> belongs t p i = false)
+  = match p with 
+    | [] -> ()
+    | hd :: tl -> if hd <> index t i
+                  then ()
+                  else index_is_not_equal_belongs_false_base t tl (i + 1)
+
+let index_is_not_equal_belongs_false (t:list english_letters) (p:list english_letters{length p <= length t}) 
+  : Lemma (ensures forall (i:nat{i <= length t - length p}). (exists (j:nat{j >= i && j < i + length p}). index t j <> index p (j - i)) ==> belongs t p i = false)
+  = forall_intro (index_is_not_equal_belongs_false_base t p)
+
+let rec indices_are_equal_belongs_true_base (t:list english_letters) (p:list english_letters{length p <= length t}) (i:nat{i <= length t - length p})
+  : Lemma (ensures (forall (j:nat{j >= i && j < i + length p}). index t j = index p (j - i)) ==> belongs t p i = true)
+  = match p with 
+    | [] -> ()
+    | hd :: tl -> if hd <> index t i 
+                  then ()
+                  else indices_are_equal_belongs_true_base t tl (i + 1)
+
+let indices_are_equal_belongs_true (t:list english_letters) (p:list english_letters{length p <= length t})
+  : Lemma (ensures forall (i:nat{i <= length t - length p}). (forall (j:nat{j >= i && j < i + length p}). index t j = index p (j - i)) ==> belongs t p i = true)
+  = forall_intro (indices_are_equal_belongs_true_base t p)
+
+let maximum (a:int) (b:int)
+  : int 
+  = if a > b 
+    then a 
+    else b 
+
+let maximum_returns_correct_result_base (a:int) (b:int)
+  : Lemma (ensures maximum a b = a ==> a >= b)
+  = ()
+
+let maximum_returns_correct_result ()
+  : Lemma (ensures forall (a:int) (b:int). maximum a b = a ==> a >= b)
+  = forall_intro_2 maximum_returns_correct_result_base
+
+let minimum (a:int) (b:int)
+  : int 
+  = if a > b 
+    then b 
+    else a 
+
+let minimum_returns_correct_result_base (a:int) (b:int)
+  : Lemma (ensures minimum a b = a ==> a <= b)
+  = ()
+
+let minimum_returns_correct_result ()
+  : Lemma (ensures forall (a:int) (b:int). minimum a b = a ==> a <= b)
+  = forall_intro_2 minimum_returns_correct_result_base
+
+let item_index_of_t_in_alphabet (t:list english_letters) (i:nat{i < length t})
+  : Lemma (ensures item_index (index t i) alphabet 0 <> [])
+  = admit()
+
+let last_is_less_than_final_bc (t:list english_letters) (i:nat{i < length t}) 
+  : Lemma (requires item_index (index t i) alphabet 0 <> [])
+          (ensures last (item_index (index t i) alphabet 0) < length final_bc)
+  = mem_last_list (item_index (index t i) alphabet 0);
+    final_bc_has_same_length_as_alphabet ();
+    item_indices_is_in_interval (index t i) alphabet 0 (last (item_index (index t i) alphabet 0))
+
+val boyer_moore (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k <= length p}) (i:nat) 
+    : Tot (result:int{result >= -1}) 
+    (decreases %[(if i < length t - length p + 1 then length t - length p + 1 - i else 0); length p - k])
+let rec boyer_moore t p k i =
+    let m = length p in
+    let n = length t in
+    if k = m then i
+    else if i > n - m then -1 
+    else (
+      if index t (i + m - 1 - k) = index p (m - 1 - k)
+      then boyer_moore t p (k + 1) i
+      else (
+        item_index_of_t_in_alphabet t (i + m - 1 - k);
+        last_is_less_than_final_bc t (i + m - 1 - k);
+        let shiftbc = m - k - 1 - index final_bc (last (item_index (index t (i + m - 1 - k)) alphabet 0)) in
+        let value = i + (maximum 1 shiftbc) in
+        boyer_moore t p 0 value
+      ) 
+    )
+
+//don't know if usefull 
+let rec length_init_list_is_length_list_minus_one (l:list english_letters)
+  : Lemma (requires l <> [])
+          (ensures length (init l) = length l - 1)
+  = match l with 
+    | [el] -> ()
+    | hd :: tl -> length_init_list_is_length_list_minus_one tl
+
+//don't know if usefull
+let rec p_less_than_t_then_init_p_less_than_t (t:list english_letters) (p:list english_letters{length p <= length t})
+  : Lemma (requires length p > 0)
+          (ensures length p <= length t ==> length (init p) <= length t)
+  = match p with 
+    | [el] -> ()
+    | hd :: tl -> length_init_list_is_length_list_minus_one p;
+                  p_less_than_t_then_init_p_less_than_t t tl
+
+let boyer_moore_result_base (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                            (k:nat{k < length p}) (i:nat{i <= length t - length p})
+  : Lemma (requires boyer_moore t p k i = boyer_moore t p (length p) i)
+          (ensures boyer_moore t p k i = i)
+  = ()
+
+let boyer_moore_result_implication (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                   (k:nat{k < length p}) (i:nat{i <= length t - length p})
+  : Lemma (ensures boyer_moore t p k i = boyer_moore t p (length p) i ==> boyer_moore t p k i = i)
+  = move_requires (boyer_moore_result_base t p k) i
+
+let boyer_moore_result (t:list english_letters) (p:list english_letters{length p <= length t})
+  : Lemma (ensures forall (k:nat{k < length p}) (i:nat{i <= length t - length p}). boyer_moore t p k i = boyer_moore t p (length p) i ==> boyer_moore t p k i = i)
+  = forall_intro_2 (boyer_moore_result_implication t p)
+
+let rec boyer_moore_value_comparison (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                     (k:nat{k <= length p}) (i:nat)
+  : Lemma (ensures boyer_moore t p k i <> boyer_moore t p (length p) i ==> boyer_moore t p k i > i || boyer_moore t p k i = -1)
+          (decreases %[(if i < length t - length p + 1 then length t - length p + 1 - i else 0); length p - k])
+  = let m = length p in 
+    let n = length t in 
+    if i > n - m 
+    then ()
+    else (
+      if k = length p
+      then ()
+      else (
+        if index t (i + m - 1 - k) = index p (m - 1 - k) 
+        then boyer_moore_value_comparison t p (k + 1) i
+        else (
+          item_index_of_t_in_alphabet t (i + m - 1 - k);
+          last_is_less_than_final_bc t (i + m - 1 - k);
+          let shiftbc = m - k - 1 - index final_bc (last (item_index (index t (i + m - 1 - k)) alphabet 0)) in
+          let value = i + (maximum 1 shiftbc) in
+          boyer_moore_value_comparison t p 0 value
+        )
+      )
+    )
+
+let k_to_m_then_index_is_equal (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                   (k:nat{k < length p}) (i:nat{i <= length t - length p})
+  : Lemma (requires boyer_moore t p k i = boyer_moore t p (length p) i)
+          (ensures index t (i + length p - 1 - k) = index p (length p - 1 - k))
+  = item_index_of_t_in_alphabet t (i + length p - 1 - k);
+    last_is_less_than_final_bc t (i + length p - 1 - k);
+    let shiftbc = length p - k - 1 - index final_bc (last (item_index (index t (i + length p - 1 - k)) alphabet 0)) in
+    let value = i + (maximum 1 shiftbc) in
+    if index t (i + length p - 1 - k) <> index p (length p - 1 - k)
+    then (
+      assert(index t (i + length p - 1 - k) <> index p (length p - 1 - k) ==> boyer_moore t p k i = boyer_moore t p 0 value);
+      boyer_moore_value_comparison t p 0 value;
+      assert(boyer_moore t p 0 value > i || boyer_moore t p 0 value = -1);
+      assert(boyer_moore t p 0 value <> boyer_moore t p (length p) i)
+    )
+    else ()
+
+let rec k_to_m_then_k'_index_is_equal_base (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                      (k:nat{k < length p}) (i:nat{i <= length t - length p})
+                                      (k':nat{k' >= k && k' < length p})
+  : Lemma (requires boyer_moore t p k i = boyer_moore t p (length p) i)
+          (ensures index t (i + length p - 1 - k') = index p (length p - 1 - k'))
+          (decreases length p - k)
+  = k_to_m_then_index_is_equal t p k i;
+    if k = length p - 1
+    then ()
+    else if k = k' then ()
+    else (
+      assert(index t (i + length p - 1 - k) = index p (length p - 1 - k) ==> boyer_moore t p k i = boyer_moore t p (k + 1) i);
+      k_to_m_then_k'_index_is_equal_base t p (k + 1) i k'
+    )
+
+let k_to_m_then_k'_index_is_equal_implication (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                              (k:nat{k < length p}) (i:nat{i <= length t - length p})
+                                              (k':nat{k' >= k && k' < length p})
+  : Lemma (ensures boyer_moore t p k i = boyer_moore t p (length p) i ==> index t (i + length p - 1 - k') = index p (length p - 1 - k'))
+  = move_requires (k_to_m_then_k'_index_is_equal_base t p k i) k'
+
+let k_to_m_then_k'_index_is_equal_forall_k' (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                            (k:nat{k < length p}) (i:nat{i <= length t - length p})
+  : Lemma (ensures boyer_moore t p k i = boyer_moore t p (length p) i ==> 
+           (forall (k':nat{k' >= k && k' < length p}). index t (i + length p - 1 - k') = index p (length p - 1 - k')))
+  = forall_intro (k_to_m_then_k'_index_is_equal_implication t p k i)
+
+let k_to_m_then_k'_index_is_equal (t:list english_letters) (p:list english_letters{length p <= length t}) 
+  : Lemma (ensures forall (k:nat{k < length p}) (i:nat{i <= length t - length p}). 
+           boyer_moore t p k i = boyer_moore t p (length p) i ==> 
+           (forall (k':nat{k' >= k && k' < length p}). index t (i + length p - 1 - k') = index p (length p - 1 - k')))
+  = forall_intro_3 (k_to_m_then_k'_index_is_equal_implication t p)
+
+let convert_from_x_to_j_base (p:list english_letters) (i:nat) (j:nat{j >= i && j < i + length p})
+  : Lemma (ensures exists (x:nat{x < length p}). j = i + length p - 1 - x)
+  = let value = i + length p - 1 - j in 
+    assert(j >= i && j < i + length p);
+    assert(-j > - i - length p && -j <= -i);
+    assert(- 1 - j > - i - length p - 1 && - 1 - j <= - i - 1);
+    assert(length p - 1 - j > - i - 1 && length p - 1 - j <= length p - i - 1);
+    assert(i + length p - 1 - j > -1 && i + length p - 1 - j <= length p - 1);
+    assert(value > -1 && value <= length p - 1);
+    assert(value >= 0 && value < length p);
+    assert(j = i + length p - 1 - value);
+    assert(exists (x:nat{x < length p}). j = i + length p - 1 - x)
+
+let convert_from_x_to_j (p:list english_letters) (i:nat)
+  : Lemma (ensures forall (j:nat{j >= i && j < i + length p}). exists (x:nat{x < length p}). j = i + length p - 1 - x)
+  = forall_intro (convert_from_x_to_j_base p i)
+
+let zero_to_m_then_belongs_true (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                (i:nat{i <= length t - length p})
+  : Lemma (requires boyer_moore t p 0 i = boyer_moore t p (length p) i)
+          (ensures belongs t p i = true)
+  = if length p > 0 
+    then (
+      k_to_m_then_k'_index_is_equal_forall_k' t p 0 i;
+      assert(forall (x:nat{x >= 0 && x < length p}). index t (i + length p - 1 - x) = index p (length p - 1 - x));
+      indices_are_equal_belongs_true_base t p i;
+      convert_from_x_to_j p i;
+      assert(forall (j:nat{j >= i && j < i + length p}). exists (x:nat{x >= 0 && x < length p}). j = i + length p - 1 - x);
+      assert(forall (j:nat{j >= i && j < i + length p}). index t j = index p (j - i))
+    )
+    else ()
+
+let rec boyer_moore_not_equal_indices_then_increase_i (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                                      (k:nat{k < length p}) (i:nat{i <= length t - length p})
+  : Lemma (requires boyer_moore t p k i <> boyer_moore t p (length p) i)
+          (ensures exists (k':nat{k' >= k && k' < length p}). index t (i + length p - 1 - k') <> index p (length p - 1 - k'))
+          (decreases length p - k)
+  = if index t (i + length p - 1 - k) = index p (length p - 1 - k)
+    then boyer_moore_not_equal_indices_then_increase_i t p (k + 1) i 
+    else ()
+
+let from_zero_to_i_boyer_moore_does_not_return_i_base (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                                      (i:nat{i <= length t - length p}) (i':nat{i' < i})
+  : Lemma (requires boyer_moore t p 0 0 = boyer_moore t p 0 i)
+          (ensures boyer_moore t p 0 i' <> boyer_moore t p (length p) i')
+  = admit()
+
+let from_zero_to_i_boyer_moore_does_not_return_i_implication (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                                             (i:nat{i <= length t - length p}) (i':nat{i' < i})
+  : Lemma (ensures boyer_moore t p 0 0 = boyer_moore t p 0 i ==> boyer_moore t p 0 i' <> boyer_moore t p (length p) i')
+  = move_requires (from_zero_to_i_boyer_moore_does_not_return_i_base t p i) i'
+
+let from_zero_to_i_boyer_moore_does_not_return_i (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                                 (i:nat{i <= length t - length p}) 
+  : Lemma (ensures forall (i':nat{i' < i}). boyer_moore t p 0 0 = boyer_moore t p 0 i ==> boyer_moore t p 0 i' <> boyer_moore t p (length p) i')
+  = forall_intro (from_zero_to_i_boyer_moore_does_not_return_i_implication t p i)
+
+let from_zero_to_i_belongs_is_false (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                    (i:nat{i <= length t - length p}) (i':nat{i' < i})
+  : Lemma (requires boyer_moore t p 0 0 = boyer_moore t p 0 i)
+          (ensures belongs t p i' = false)
+  = from_zero_to_i_boyer_moore_does_not_return_i t p i;
+    boyer_moore_not_equal_indices_then_increase_i t p 0 i';
+    index_is_not_equal_belongs_false_base t p i'
+
+let from_i_to_i_plus_shiftbc_belongs_is_false (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                              (i:nat{i <= length t - length p}) (i':nat{i' >= i})
+                                              (shiftbc:nat)
+  : Lemma (requires boyer_moore t p 0 0 = boyer_moore t p 0 i /\ (forall (x:nat{x < i}). belongs t p x = false)
+                    /\ boyer_moore t p 0 i = boyer_moore t p 0 (i + shiftbc) /\ i' < i + shiftbc)
+          (ensures belongs t p i' = false)
+  = assert(boyer_moore t p 0 i <> boyer_moore t p (length p) i);
+    
+
+// let last_characters_match (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1})
+//   : Lemma (ensures 
+//            (let i' = length t - length p + 1 - i in
+//             boyer_moore t p k i = boyer_moore t p (k - 1) i ==> index t (i' + k - 1) = index p (k - 1)))
+//   = let i' = length t - length p + 1 - i in
+//     if index t (i' + k - 1) = index p (k - 1)
+//     then ()
+//     else (
+//       assert(boyer_moore t p k i = boyer_moore t p (length p) (i - 1));
+//       case_last_characters_do_not_match t p k i
+//     )
+
+// let rec boyer_moore_for_k_to_k' (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1}) (k':nat{k' < k})
+//   : Lemma (ensures boyer_moore t p k i = boyer_moore t p k' i ==> boyer_moore t p (k - 1) i = boyer_moore t p k' i)
+//   = let el = k' + 1 in
+//     match k with 
+//     | el -> assume(el = k' + 1) 
+//     | _ -> boyer_moore_for_k_to_k' t p (k - 1) i k'
+
+// let rec boyer_moore_result_of_i_minusone (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k <= length p}) (i:nat{i <= length t - length p + 1})
+//   : Lemma (ensures boyer_moore t p k i >= length t - length p + 1 - i || boyer_moore t p k i = -1) (decreases %[i;k])
+//   = let i' = length t - length p + 1 - i in
+//     match i with 
+//     | 0 -> admit()
+//     | _ -> match k with 
+//            | 0 -> admit()
+//            | _ -> if index t (i' + k - 1) = index p (k - 1)
+//                   then (
+//                     assert(boyer_moore t p k i = boyer_moore t p (k - 1) i);
+//                     boyer_moore_result_of_i_minusone t p (k - 1) i;
+//                     assert(boyer_moore t p (k - 1) i >= length t - length p + 1 - i || boyer_moore t p (k - 1) i = -1);
+//                     assert(boyer_moore t p k i >= length t - length p + 1 - i || boyer_moore t p k i = -1);
+//                     admit()
+//                   )
+//                   else (
+//                     item_index_of_t_in_alphabet t (i' + k - 1);
+//                     last_is_less_than_final_bc t (i' + k - 1);
+//                     let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//                     let index = i - (maximum 1 shiftbc) in
+//                     let index' = maximum 0 index in
+//                     assert(boyer_moore t p k i = boyer_moore t p (length p) index');
+//                     boyer_moore_result_of_i_minusone t p (length p) index';
+//                     assert(boyer_moore t p (length p) index' >= length t - length p + 1 - i || boyer_moore t p (length p) index' = -1);
+//                     admit()
+//                   )
+
+// let boyer_moore_different_i_different_result (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1})
+//   : Lemma (requires item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0 <> [] &&
+//                     last (item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0) < length final_bc)
+//           (ensures 
+//            (let i' = length t - length p + 1 - i in 
+//             let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//             let value = i - (maximum 1 shiftbc) in
+//             let value' = maximum 0 value in
+//             boyer_moore t p k i = boyer_moore t p 0 i ==> boyer_moore t p k i <> boyer_moore t p (length p) value'))
+//   = let i' = length t - length p + 1 - i in 
+//     let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//     let value = i - (maximum 1 shiftbc) in
+//     let value' = maximum 0 value in
+//     boyer_moore_result_of_i_minusone t p (length p) value'
+
+// let boyer_moore_different_result_different_i (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1})
+//   : Lemma (requires item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0 <> [] &&
+//                     last (item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0) < length final_bc)
+//           (ensures 
+//            (let i' = length t - length p + 1 - i in 
+//             let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//             let value = i - (maximum 1 shiftbc) in
+//             let value' = maximum 0 value in
+//             boyer_moore t p k i = boyer_moore t p (length p) value' ==> boyer_moore t p k i <> boyer_moore t p 0 i))
+//   = let i' = length t - length p + 1 - i in 
+//     let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//     let value = i - (maximum 1 shiftbc) in
+//     let value' = maximum 0 value in
+//     boyer_moore_result_of_i_minusone t p (length p) value'
+
+// let boyer_moore_no_i_minusone_equal_indices (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1})
+//   : Lemma (requires item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0 <> [] &&
+//                     last (item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0) < length final_bc)
+//           (ensures 
+//            (let i' = length t - length p + 1 - i in 
+//             let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//             let value = i - (maximum 1 shiftbc) in
+//             let value' = maximum 0 value in
+//             boyer_moore t p k i <> boyer_moore t p (length p) value' ==> index t (i' + k - 1) = index p (k - 1)))
+//   = ()
+
+// let boyer_moore_k_zero_equal_indices (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1})
+//   : Lemma (ensures 
+//            (let i' = length t - length p + 1 - i in
+//             boyer_moore t p k i = boyer_moore t p 0 i ==> index t (i' + k - 1) = index p (k - 1)))
+//   = let i' = length t - length p + 1 - i in
+//     item_index_of_t_in_alphabet t (i' + k - 1);
+//     last_is_less_than_final_bc t (i' + k - 1);
+//     boyer_moore_different_i_different_result t p k i;
+//     boyer_moore_no_i_minusone_equal_indices t p k i
+
+// let rec boyer_moore_from_length_p_to_zero_all_indices_are_equal_base (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i <= length t - length p + 1}) (k':nat{k' > 0 && k' <= k})
+//   : Lemma (ensures 
+//            (let i' = length t - length p + 1 - i in 
+//             boyer_moore t p k i = boyer_moore t p 0 i ==> index t (i' + k' - 1) = index p (k' - 1))) (decreases %[i;k])
+//   = let i' = length t - length p + 1 - i in 
+//     match i with 
+//     | 0 -> ()
+//     | _ -> match k with 
+//            | 1 -> boyer_moore_k_zero_equal_indices t p k i
+//            | _ -> item_index_of_t_in_alphabet t (i' + k - 1);
+//                   last_is_less_than_final_bc t (i' + k - 1);
+//                   if index t (i' + k - 1) = index p (k - 1)
+//                   then (
+//                     if k > k'
+//                     then boyer_moore_from_length_p_to_zero_all_indices_are_equal_base t p (k - 1) i k'
+//                     else boyer_moore_k_zero_equal_indices t p k i
+//                   )
+//                   else (
+//                     boyer_moore_different_result_different_i t p k i;
+//                     assert(boyer_moore t p k i <> boyer_moore t p 0 i);
+//                     let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//                     let value = i - (maximum 1 shiftbc) in
+//                     let value' = maximum 0 value in
+//                     boyer_moore_from_length_p_to_zero_all_indices_are_equal_base t p (length p) value' k'
+//                   )
+
+// let boyer_moore_from_length_p_to_zero_all_indices_are_equal (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i <= length t - length p + 1})
+//   : Lemma (ensures 
+//            (let i' = length t - length p + 1 - i in 
+//             boyer_moore t p k i = boyer_moore t p 0 i ==> (forall (k':nat{k' > 0 && k' <= k}). index t (i' + k' - 1) = index p (k' - 1))))
+//   = forall_intro (boyer_moore_from_length_p_to_zero_all_indices_are_equal_base t p k i)
+
+// let rec boyer_moore_from_length_p_to_zero_some_index_not_equal (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i <= length t - length p + 1})
+//   : Lemma (ensures 
+//            (let i' = length t - length p + 1 - i in 
+//             boyer_moore t p k i <> boyer_moore t p 0 i && i > 0 ==> (exists (k':nat{k' > 0 && k' <= k}). index t (i' + k' - 1) <> index p (k' - 1)))) (decreases %[i;k])
+//   = let i' = length t - length p + 1 - i in 
+//     match i with 
+//     | 0 -> ()
+//     | _ -> match k with 
+//            | 1 -> ()
+//            | _ -> if index t (i' + k - 1) = index p (k - 1)
+//                   then boyer_moore_from_length_p_to_zero_some_index_not_equal t p (k - 1) i
+//                   else (
+//                     item_index_of_t_in_alphabet t (i' + k - 1);
+//                     last_is_less_than_final_bc t (i' + k - 1);
+//                     let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//                     let value = i - (maximum 1 shiftbc) in
+//                     let value' = maximum 0 value in
+//                     boyer_moore_from_length_p_to_zero_some_index_not_equal t p (length p) value';
+//                     assert(boyer_moore t p k i = boyer_moore t p (length p) value');
+//                     assert(index t (i' + k - 1) <> index p (k - 1));
+//                     assert(k > 0 && k <= k);
+//                     assert(exists (k':nat{k' > 0 && k' <= k}). index t (i' + k' - 1) <> index p (k' - 1))
+//                   )
+
+// let rec boyer_moore_aux (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k <= length p}) (i:nat{i <= length t - length p + 1}) (el:nat{el <= i})
+//   : Lemma (ensures boyer_moore t p k i = boyer_moore t p (length p) el && i > 0 ==> boyer_moore t p (length p) (i - 1) = boyer_moore t p (length p) el) (decreases %[i;k])
+//   = let i' = length t - length p + 1 - i in 
+//     match i with 
+//     | 0 -> ()
+//     | _ -> match k with 
+//            | 0 -> admit()
+//            | _ -> item_index_of_t_in_alphabet t (i' + k - 1);
+//                   last_is_less_than_final_bc t (i' + k - 1);
+//                   let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//                   let value = i - (maximum 1 shiftbc) in
+//                   let value' = maximum 0 value in
+//                   if index t (i' + k - 1) = index p (k - 1)
+//                   then (
+//                     assume(el = value');
+//                     boyer_moore_aux t p (k - 1) i value'
+//                   )
+//                   else admit()
+
+// let rec not_equal_zero_equal_i_minusone (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k <= length p}) (i:nat{i <= length t - length p + 1})
+//   : Lemma (ensures boyer_moore t p k i <> boyer_moore t p 0 i && i > 0 ==> boyer_moore t p k i = boyer_moore t p (length p) (i - 1)) (decreases %[i;k])
+//   = let i' = length t - length p + 1 - i in 
+//     match i with 
+//     | 0 -> ()
+//     | _ -> match k with 
+//            | 0 -> ()
+//            | _ -> if index t (i' + k - 1) = index p (k - 1)
+//                   then not_equal_zero_equal_i_minusone t p (k - 1) i 
+//                   else (
+//                     item_index_of_t_in_alphabet t (i' + k - 1);
+//                     last_is_less_than_final_bc t (i' + k - 1);
+//                     assume(i' + k < length t);
+//                     item_index_of_t_in_alphabet t (i' + k);
+//                     last_is_less_than_final_bc t (i' + k);
+//                     let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//                     let value = i - (maximum 1 shiftbc) in
+//                     let value' = maximum 0 value in
+//                     not_equal_zero_equal_i_minusone t p (length p) value';
+//                     boyer_moore_aux t p k i value'
+//                   )
+
+// let rec boyer_moore_for_different_i_equality (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i <= length t - length p + 1}) (i':nat{i' < i})
+//   : Lemma (requires item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0 <> [] &&
+//             last (item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0) < length final_bc)
+//           (ensures 
+//            (let el = length t - length p + 1 - i in 
+//             let shiftbc = k - 1 - index final_bc (last (item_index (index t (el + k - 1)) alphabet 0)) in
+//             let value = i - (maximum 1 shiftbc) in
+//             let value' = maximum 0 value in
+//             boyer_moore t p k i = boyer_moore t p (length p) value' && i' > value' ==> boyer_moore t p (i - i') i' = boyer_moore t p (length p) value'))
+//   = let el = length t - length p + 1 - i in
+//     assert(item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0 <> [] &&
+//                     last (item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0) < length final_bc);
+//     match i with 
+//     | 0 -> ()
+//     | _ -> match k with 
+//            | 1 -> if index t (el + k - 1) = index p (k - 1)
+//                   then ()
+//                   else admit()
+//            | _ -> if index t (el + k - 1) = index p (k - 1)
+//                   then (
+//                     item_index_of_t_in_alphabet t (el + k - 2);
+//                     last_is_less_than_final_bc t (el + k - 2);
+//                     assert(item_index (index t (length t - length p + 1 - i + k - 2)) alphabet 0 <> [] &&
+//                     last (item_index (index t (length t - length p + 1 - i + k - 2)) alphabet 0) < length final_bc);
+//                     boyer_moore_for_different_i_equality t p (k - 1) i i'
+//                   )
+//                   else (
+//                     let shiftbc = k - 1 - index final_bc (last (item_index (index t (el + k - 1)) alphabet 0)) in
+//                     let value = i - (maximum 1 shiftbc) in
+//                     let value' = maximum 0 value in
+//                     boyer_moore_for_different_i_equality t p (k - 1) i i'
+//                   )
+
+// let rec belongs_false_if_less_than_i_base (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k <= length p}) (i:nat{i <= length t - length p + 1}) (i':nat{i' < i}) (i'':nat{i'' > i' && i'' <= i}) 
+//   : Lemma (ensures 
+//            (let i''' = length t - length p + 1 - i'' in 
+//             boyer_moore t p k i = boyer_moore t p (length p) i' ==> belongs t p i''' = false)) (decreases %[i;k])
+//   = let value = length t - length p + 1 - i in 
+//     match i with 
+//     | 0 -> ()
+//     | _ -> match k with 
+//            | 0 -> boyer_moore_result_of_i_minusone t p (length p) i' 
+//            | _ -> if index t (value + k - 1) <> index p (k - 1)
+//                   then (
+//                     item_index_of_t_in_alphabet t (value + k - 1);
+//                     last_is_less_than_final_bc t (value + k - 1);
+//                     let shiftbc = k - 1 - index final_bc (last (item_index (index t (value + k - 1)) alphabet 0)) in
+//                     let value' = i - (maximum 1 shiftbc) in
+//                     let value'' = maximum 0 value' in
+//                     assert(boyer_moore t p k i = boyer_moore t p (length p) value'');
+//                     admit()
+//                   )
+//                   else belongs_false_if_less_than_i_base t p (k - 1) i i' i''
+
+// let belongs_false_if_less_than_i (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1}) 
+//   : Lemma (ensures 
+//            (forall (i':nat{i' < i}) (i'':nat{i'' > i' && i'' <= i}).
+//             let i''' = length t - length p + 1 - i'' in 
+//             boyer_moore t p k i = boyer_moore t p (length p) i' ==> belongs t p i''' = false))
+//   = forall_intro_2 (belongs_false_if_less_than_i_base t p k i)
+
+// let rec equality_for_i_equality_for_i_minusone (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1})
+//   : Lemma (requires item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0 <> [] &&
+//             last (item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0) < length final_bc)
+//           (ensures 
+//            (let i' = length t - length p + 1 - i in 
+//             let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//             let value = i - (maximum 1 shiftbc) in
+//             let value' = maximum 0 value in
+//             boyer_moore t p k i = boyer_moore t p (length p) value' ==> boyer_moore t p k (i - 1) = boyer_moore t p (length p) value'))
+  // = let i' = length t - length p + 1 - i in
+  //   match i with 
+  //   | 1 -> ()
+  //   | _ -> match k with 
+  //          | 1 -> admit()
+  //          | _ -> if index t (i' + k - 1) = index p (k - 1)
+  //                 then (
+  //                   item_index_of_t_in_alphabet t (i' + (k - 1) - 1);
+  //                   last_is_less_than_final_bc t (i' + (k - 1) - 1);
+  //                   assert(item_index (index t (length t - length p + 1 - i + (k - 1) - 1)) alphabet 0 <> []);
+  //                   assert(last (item_index (index t (length t - length p + 1 - i + (k - 1) - 1)) alphabet 0) < length final_bc);
+  //                   assert(boyer_moore t p k i = boyer_moore t p (k - 1) i);
+  //                   equality_for_i_equality_for_i_minusone t p (k - 1) i
+  //                 )
+  //                 else admit()
+  // = admit()
+
+// let proof_for_value (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1})
+//   : Lemma (ensures 
+//            (let i' = length t - length p + 1 - i in 
+//             let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//             let value = i - (maximum 1 shiftbc) in
+//             let value' = maximum 0 value in
+//             ))
+
+// let rec belongs_false_if_less_than_i_for_shiftbc (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1}) (i'':nat{i'' <= i}) (el:nat)
+//   : Lemma (requires item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0 <> [] &&
+//             last (item_index (index t (length t - length p + 1 - i + k - 1)) alphabet 0) < length final_bc &&
+//             (let i' = length t - length p + 1 - i in 
+//             let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//             let value = i - (maximum 1 shiftbc) in
+//             let value' = maximum 0 value in
+//             el = value'))
+//           (ensures 
+//            (let i''' = length t - length p + 1 - i'' in 
+//             boyer_moore t p k i = boyer_moore t p (length p) el && i'' > el ==> belongs t p i''' = false)) (decreases %[i;k])
+//   = let i' = length t - length p + 1 - i in
+//     match i with 
+//     | 1 -> admit()
+//     | _ -> match k with 
+//            | 1 -> admit()
+//            | _ -> let shiftbc = k - 1 - index final_bc (last (item_index (index t (i' + k - 1)) alphabet 0)) in
+//                   let value = i - (maximum 1 shiftbc) in
+//                   let value' = maximum 0 value in
+//                   not_equal_zero_equal_i_minusone t p k i;
+//                   assert(boyer_moore t p k i <> boyer_moore t p 0 i ==> boyer_moore t p k i = boyer_moore t p (length p) (i - 1));
+//                   if boyer_moore t p k i = boyer_moore t p 0 i
+//                   then boyer_moore_result_of_i_minusone t p (length p) value'
+//                   else (
+//                     if i > i''
+//                     then (
+//                       item_index_of_t_in_alphabet t (length t - length p + 1 - i + 1 + length p - 1);
+//                       last_is_less_than_final_bc t (length t - length p + 1 - i + 1 + length p - 1);
+//                       assert(i - 1 >= i'');
+//                       assert(item_index (index t (length t - length p + 1 - i + 1 + length p - 1)) alphabet 0 <> [] &&
+//             last (item_index (index t (length t - length p + 1 - i + 1 + length p - 1)) alphabet 0) < length final_bc);
+                      
+//                       belongs_false_if_less_than_i_for_shiftbc t p (length p) (i - 1) i'' value'
+//                     )
+//                     else admit()
+//                   )
+
+// let belongs_false_for_shiftbc (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1}) 
+//   : Lemma (ensures 
+//            (let i' = length t - length p + 1 - i in
+//             let shiftbc = 1 in 
+//             boyer_moore t p k i = boyer_moore t p (length p) (i - shiftbc) ==> belongs t p i' = false))
+//   = let shiftbc = 1 in
+//     belongs_false_if_less_than_i_base t p k i (i - shiftbc) i
+
+// let boyer_moore_returns_nat_belongs_is_true (t:list english_letters) (p:list english_letters{length p <= length t}) 
+//   : Lemma (ensures 
+//            (let x = boyer_moore t p (length p) (length t - length p + 1) in 
+//             x <> -1 ==> belongs t p x = true))
+//   = if length p > 0 && index t (length p - 1) = index p (length p - 1)
+//     then (
+//       assert(boyer_moore t p (length p) (length t - length p + 1) = boyer_moore t p (length p - 1) (length t - length p + 1));
+//       admit()
+//     )
+    // else admit()
+
+// let boyer_moore_returns_minusone_belongs_is_false (i:nat{i < length text})
+//   : Lemma (ensures 
+//            (let x = boyer_moore text pattern (length pattern) (length text - length pattern + 1) in 
+//             x = -1 ==> (exists (j:nat{j >= }))))
+//   = ()
+
+let string_of_int_list l =
+Printf.sprintf "[%s]"
+(String.concat "; " (List.Tot.map (Printf.sprintf "%d") l))
+
+let main() =
+  let message =
+     if length pattern <= length text
+     then sprintf "The result is %d." (boyer_moore text pattern 0 0)
+     else sprintf "The length of the pattern needs to be less or equal to the length of the text!"
+  in
+  print_string message
+
+#push-options "--warn_error -272"
+let _ = main()
+#pop-options
