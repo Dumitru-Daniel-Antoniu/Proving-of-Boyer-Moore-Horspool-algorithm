@@ -627,7 +627,7 @@ let rec update_bc_has_correct_index_if_letter_is_in_pattern_base (l:list english
                                                                  (i:nat{i < length l && i < length (update_bc l)}) (j:nat{j < length pattern})
   : Lemma (ensures 
            (let l' = update_bc l in
-            index l' i = j ==> index pattern j = index l i /\ (forall (i':nat{i' > i && i' < length pattern}). index pattern i' <> index l i)))
+            index l' i = j ==> index pattern j = index l i /\ (forall (i':nat{i' > j && i' < length pattern}). index pattern i' <> index l i)))
   = update_bc_length_is_initial_list_length l;
     match l with 
     | [] -> ()
@@ -639,12 +639,39 @@ let rec update_bc_has_correct_index_if_letter_is_in_pattern_base (l:list english
                           then (
                             if item_index (index l i) l 0 <> [] && last (item_index (index l i) l 0) < length l
                             then new_or_old_not_empty_list_correct_item_base pattern fst
-                            else admit()
+                            else ()
                           )
                           else ()
                    | _ -> update_bc_has_correct_index_if_letter_is_in_pattern_base tl (i - 1) j
 
+let update_bc_has_correct_index_if_letter_is_in_pattern_forall_j (l:list english_letters) (i:nat{i < length l && i < length (update_bc l)})
+  : Lemma (ensures 
+           (let l' = update_bc l in forall (j:nat{j < length pattern}).
+            index l' i = j ==> index pattern j = index l i /\ (forall (i':nat{i' > j && i' < length pattern}). index pattern i' <> index l i)))
+  = forall_intro (update_bc_has_correct_index_if_letter_is_in_pattern_base l i)
+
+let update_bc_has_correct_index_if_letter_is_in_pattern (l:list english_letters)
+  : Lemma (ensures 
+           (let l' = update_bc l in forall (i:nat{i < length l && i < length (update_bc l)}) (j:nat{j < length pattern}).
+            index l' i = j ==> index pattern j = index l i /\ 
+            (forall (i':nat{i' > j && i' < length pattern}). index pattern i' <> index l i)))
+  = forall_intro (update_bc_has_correct_index_if_letter_is_in_pattern_forall_j l)
+
 let final_bc : list int = update_bc alphabet
+
+let update_bc_has_index_minusone_if_letter_is_not_in_pattern_for_alphabet ()
+  : Lemma (ensures forall (i:nat{i < length alphabet && i < length (update_bc alphabet)}). (forall (j:nat{j < length pattern}).  
+           (let l' = update_bc alphabet in
+            index l' i = -1 ==> index pattern j <> index alphabet i)))
+  = update_bc_has_index_minusone_if_letter_is_not_in_pattern alphabet
+
+let update_bc_has_correct_index_if_letter_is_in_pattern_for_alphabet ()
+  : Lemma (ensures 
+           (let l' = update_bc alphabet in forall 
+            (i:nat{i < length alphabet && i < length (update_bc alphabet)}) (j:nat{j < length pattern}).
+            index l' i = j ==> index pattern j = index alphabet i /\ 
+            (forall (i':nat{i' > j && i' < length pattern}). index pattern i' <> index alphabet i)))
+  = update_bc_has_correct_index_if_letter_is_in_pattern alphabet
 
 let final_bc_has_same_length_as_alphabet () 
   : Lemma (ensures length final_bc = length alphabet)
@@ -941,14 +968,58 @@ let from_zero_to_i_belongs_is_false (t:list english_letters) (p:list english_let
     boyer_moore_not_equal_indices_then_increase_i t p 0 i';
     index_is_not_equal_belongs_false_base t p i'
 
-let from_i_to_i_plus_shiftbc_belongs_is_false (t:list english_letters) (p:list english_letters{length p <= length t}) 
-                                              (i:nat{i <= length t - length p}) (i':nat{i' >= i})
-                                              (shiftbc:nat)
-  : Lemma (requires boyer_moore t p 0 0 = boyer_moore t p 0 i /\ (forall (x:nat{x < i}). belongs t p x = false)
-                    /\ boyer_moore t p 0 i = boyer_moore t p 0 (i + shiftbc) /\ i' < i + shiftbc)
+let boyer_moore_to_value_then_not_boyer_moore_to_length_p (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                                          (k:nat{k < length p}) (i:nat{i <= length t - length p}) 
+  : Lemma (requires item_index (index t (i + length p - 1 - k)) alphabet 0 <> [] /\
+           last (item_index (index t (i + length p - 1 - k)) alphabet 0) < length final_bc /\
+          (let shiftbc = length p - k - 1 - index final_bc (last (item_index (index t (i + length p - 1 - k)) alphabet 0)) in
+           let value = i + (maximum 1 shiftbc) in
+           boyer_moore t p 0 i = boyer_moore t p k i /\
+           (forall (k':nat{k' < k}). index t (i + length p - 1 - k') = index p (length p - 1 - k')) /\
+           index t (i + length p - 1 - k) <> index p (length p - 1 - k)))
+          (ensures boyer_moore t p k i <> boyer_moore t p (length p) i)
+  = assert(boyer_moore t p (length p) i = i);
+    let shiftbc = length p - k - 1 - index final_bc (last (item_index (index t (i + length p - 1 - k)) alphabet 0)) in
+    let value = i + (maximum 1 shiftbc) in
+    boyer_moore_value_comparison t p 0 value;
+    assert(boyer_moore t p 0 value >= value || boyer_moore t p 0 value = -1)
+
+let boyer_moore_belongs_false_if_less_than_shiftbc (t:list english_letters) (p:list english_letters{length p <= length t}) 
+                                                   (k:nat{k < length p}) (i:nat{i <= length t - length p}) 
+                                                   (i':nat{i' >= i})
+  : Lemma (requires item_index (index t (i + length p - 1 - k)) alphabet 0 <> [] /\
+           last (item_index (index t (i + length p - 1 - k)) alphabet 0) < length final_bc /\
+          (let shiftbc = length p - k - 1 - index final_bc (last (item_index (index t (i + length p - 1 - k)) alphabet 0)) in
+           let value = i + (maximum 1 shiftbc) in
+           boyer_moore t p 0 0 = boyer_moore t p 0 i /\ 
+           boyer_moore t p 0 i = boyer_moore t p k i /\
+           (forall (k':nat{k' < k}). index t (i + length p - 1 - k') = index p (length p - 1 - k')) /\
+           index t (i + length p - 1 - k) <> index p (length p - 1 - k) /\ i' < value))
           (ensures belongs t p i' = false)
-  = assert(boyer_moore t p 0 i <> boyer_moore t p (length p) i);
-    
+          (decreases length p - k)
+  = let shiftbc = length p - k - 1 - index final_bc (last (item_index (index t (i + length p - 1 - k)) alphabet 0)) in
+    let value = i + (maximum 1 shiftbc) in
+    assert(boyer_moore t p 0 i = boyer_moore t p 0 value);
+    item_index_of_t_in_alphabet t (i + length p - 1 - k);
+    last_is_less_than_final_bc t (i + length p - 1 - k);
+    boyer_moore_to_value_then_not_boyer_moore_to_length_p t p k i;
+    assert(boyer_moore t p k i = boyer_moore t p 0 value);
+    assert(boyer_moore t p k i <> boyer_moore t p (length p) i);
+    if shiftbc > 0
+    then (
+      assert(index final_bc (last (item_index (index t (i + length p - 1 - k)) alphabet 0)) < length p - 1 - k);
+      update_bc_has_correct_index_if_letter_is_in_pattern_for_alphabet ();
+      final_bc_has_same_length_as_alphabet ();
+      //(let l' = update_bc alphabet in forall 
+      //(i:nat{i < length alphabet && i < length (update_bc alphabet)}) (j:nat{j < length pattern}).
+      //index l' i = j ==> index pattern j = index alphabet i /\ 
+      //(forall (i':nat{i' > j && i' < length pattern}). index pattern i' <> index alphabet i))
+      let j = index final_bc (last (item_index (index t (i + length p - 1 - k)) alphabet 0)) in
+      assert(forall (i:nat{i < length alphabet && i < length (update_bc alphabet)}). index final_bc i = j && j < length pattern ==>
+             index pattern j = index alphabet i);
+      admit()
+    )
+    else admit()
 
 // let last_characters_match (t:list english_letters) (p:list english_letters{length p <= length t}) (k:nat{k > 0 && k <= length p}) (i:nat{i > 0 && i <= length t - length p + 1})
 //   : Lemma (ensures 
