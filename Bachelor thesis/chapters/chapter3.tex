@@ -1,0 +1,65 @@
+\chapter{Proof for Boyer-Moore algorithm}
+
+One of the problems
+
+\section{Defining the input data}
+
+A key element in Boyer-Moore algorithm is the alphabet array. All of the characters from text and pattern needs to be elements from this vector. In order to define it, I created a type in F* which contains the first 2 letters from the english alphabet.
+
+{\fontfamily{pcr} \selectfont
+type englishLetters = 
+  | A
+  | B
+}
+
+Then I defined the alphabet array as a list which contains both of the englishLetters. I used a refinement type to specify that the list cannot be empty and all of the elements of type englishLetters are in the array.
+
+{\fontfamily{pcr} \selectfont
+val alphabet : (l:list englishLetters{(forall (x:englishLetters). mem x l = true) /\  l <> []}) \\
+let alphabet = [A;B]
+}
+
+The next two global variables are text and pattern. Like alphabet, each of these variables are lists of englishLetters. Text is a non-empty list and pattern is a list of length less or equal than the length of text. From the definition, the second list can be null.
+
+{\fontfamily{pcr} \selectfont
+val text : (l:list englishLetters{l <> []})
+let text = [A;A;A;A;B;A;A;B;A;B;A;A;A;B;A;B;B]
+val pattern : (l:list englishLetters{length l <= length text})
+let pattern = [A;B;B]
+}
+
+Length and mem are functions defined in FStar.List.Tot.Base library. The first function (length l) returns the length of the list l and the second function (mem x l) verifies if x is in the list l (x has the same type as the elements from l).
+
+\section{Defining the bad character list}
+
+Initially, all of the values from bc list are equal with -1. In F*, this property can be achieved with a recursive function.
+
+{\fontfamily{pcr} \selectfont
+let rec create_bc (i:nat) \\
+  : Tot (list int) (decreases i) \\
+  = match i with \\
+    | 0 -> [] \\
+    | _ -> (-1) :: (create_bc (i - 1))
+}
+
+Tot is an effect label which indicates that the function will always return a result. The label is optional. The instruction (decreases i) is used to ensure that the recursive call will end, since i decreases until it arrives to 0, the least natural number.[2]
+
+To ensure that the function gives the correct result, I proved that the length of the generated list is at least zero and is equal with the value of the parameter i. I also proved that each value is equal with -1. For each of these properties, I made a separate Lemma. For example, for the last property, the proof looks like this:
+
+{\fontfamily{pcr} \selectfont
+let rec index_n_bc_is_minusone (i:nat) \\
+  : Lemma (ensures \\
+          (let l = (create_bc i) in \\
+           forall (n:nat). n < length l ==> index l n = -1)) \\
+  = match i with \\
+    | 0 -> ()
+    | _ -> index_n_bc_is_minusone (i - 1)
+}
+
+A Lemma is a function which always returns the ():unit value. The type of it carries usefull information about certain properties which are provable. If the proof was verified and no errors were given, then the proof is valid.[2]
+
+Index (index l n) is another function from the FStar.List.Tot.Base library. It returns the n-th item from the list l. As a constraint, the value of n needs to be less than the length of l.
+
+\section{Defining a function which stores a list of indices}
+
+Some usefull functions for the lists are defined in F* libraries. However, there was no function which returns the index where a certain element is stored in a list, so I made one which returns a list with all of the indices where a value can be found. 

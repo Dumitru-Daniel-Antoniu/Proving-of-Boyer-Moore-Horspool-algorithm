@@ -1,0 +1,12 @@
+\chapter{Boyer-Moore algorithm}
+
+Boyer-Moore is one of the most efficient algorithms used in practice. It is used in text editors for functions like find and replace, but also in instruments like grep.[1]
+This algorithm is based on two heuristics: the bad character and the good suffix. Each of them can be used independently and helps in shifting the pattern such that we can find a match(if there exists one) in an efficient amount of time. One particularity is that the instructions are executed faster as the size of the input data increases. 
+
+\section{The bad character heuristic}
+
+To use this heuristic, it is necessary to preprocess the pattern string. In order to do that, an array of the same length as the alphabet is created. Let's call this array bc. Each index from bc corresponds to the character from the alphabet stored in the same index (for example, the second index from bc corresponds to the second character from the alphabet). In each index is stored the last position of the character in pattern. To treat the case where a value from the alphabet is not in the pattern, all of the indices from bc will be initially set to -1. After that, we go through each index from the pattern, from the first one to the last one, and we store the position of the character in bc. If a value appears in more than one position , the last one will overwrite the other ones.
+
+\section{The good suffix heuristic}
+
+As in the bad character heuristic, the pattern is preprocessed and the values are stored in an array. Let's call this array gs. 
