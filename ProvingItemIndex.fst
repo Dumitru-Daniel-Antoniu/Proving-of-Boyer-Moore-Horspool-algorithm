@@ -34,13 +34,13 @@ type english_letters =
   // | Y 
   // | Z
 
-val alphabet : (l:list english_letters{l <> []})
+val alphabet : (l:list english_letters{(forall (x:english_letters). mem x l = true) /\ l <> []})
 let alphabet = [A;B]//;C;D;E;F;G;H;I;J;K;M;N;O;P;Q;R;S;T;U;V;W;X;Y;Z]
   
 val text : (l:list english_letters{l <> []})
 let text = [A;A;A;A;B;A;A;B;A;B;A;A;A;B;A;B;B]
 
-val pattern : list english_letters
+val pattern : (l:list english_letters{length l <= length text})
 let pattern = [A;B;B]
 
 val alphabet_length : (i:nat{i > 0})
