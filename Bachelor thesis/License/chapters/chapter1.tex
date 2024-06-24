@@ -1,0 +1,46 @@
+\chapter{The Boyer-Moore-Horspool Algorithm}
+
+The Boyer-Moore algorithm is based on two heuristics: the bad character heuristic and the good suffix heuristic. Each of them can be used independently and helps in shifting the pattern such that we can find a match (if there exists one) efficiently. One peculiarity of this algorithm is that it can be faster when the size of the input data is larger[\(1\)]. \\
+\indent The algorithm Boyer-Moore-Horspool is a simplified version of Boyer-Moore and it uses only the bad character heuristic. As input data, it takes \(2\) parameters: a string \texttt{text} and a string \texttt{pattern}. The algorithm returns an integer. Its value is the first position in \texttt{text} where \texttt{pattern} is found or \(-1\) if \texttt{pattern} is not a substring of \texttt{text}. There is also the version of Boyer-Moore-Horspool where the output is a bool value: true if \texttt{pattern} is in \texttt{text} and false otherwise.
+
+\section{Rules for Matching}
+
+Both \texttt{text} and \texttt{pattern} are string values. The \(2\) parameters must fulfill \(2\) criteria: all of the characters in both strings are elements in the same alphabet (defined by a string with the name \texttt{alphabet}) and the length of \texttt{pattern} is less or equal than the length of \texttt{text}. The comparison between characters in \texttt{text} and characters in \texttt{pattern} starts from right to left and is made while there is an equality relation between the values in the \(2\) indices (or while there are characters in \texttt{pattern}). If there is a mismatch, we focus only on the character in the text where the mismatch happened (the bad character) and its appearances in the \texttt{pattern} string. There are \(3\) possible cases:
+\begin{enumerate}
+\item The last occurrence of the bad character in \texttt{pattern} is to the left of the mismatch - here, the shift is made such that the respective occurrence matches the character in \texttt{text};
+\item The bad character is not in \texttt{pattern} - since there cannot be any match, \texttt{pattern} is shifted such that it is positioned just after the bad character (on the next position in \texttt{text});
+\item The last occurrence of the bad character in \texttt{pattern} is to the right of the mismatch - it is ineffective to match that position with the bad character because the shift will be to the left, where we already know that the \texttt{pattern} does not match with the \texttt{text}. In this particular case, the offset is incremented by \(1\) in order to not miss any possible matching [\(1\)].
+\end{enumerate}
+
+\section{Preprocessing}
+
+To use the bad character heuristic, it is necessary to preprocess the pattern string. In order to do that, an array of the same length as \texttt{alphabet} is created. Let us call this array \texttt{bc}. Each index in \texttt{bc} corresponds to the character in \texttt{alphabet} stored in the same index (for example, the second index in \texttt{bc} corresponds to the second character in \texttt{alphabet}). At each index we stored the last position of the character in \texttt{pattern}. To treat the case where a value in the alphabet is not in \texttt{pattern}, all of the indices in \texttt{bc} will be initially set to \(-1\). After that, we go through each index in \texttt{pattern}, from the first one to the last one, and we store the position of the character in \texttt{bc}. If a symbol occurs in more than one position, the last one will overwrite the other ones.
+
+\section{The Main Algorithm}
+
+Based on the presentation [\(1\)], the Boyer-Moore-Horspool algorithm is:
+
+\begin{minted}{C++}
+int Boyer-Moore-Horspool (string T) (string P) {
+  int k = 0;
+  int i = 0;
+  int m = P.size();
+  int n = T.size();
+  while(k < m && i <= n - m) {
+    if(T[i + m - 1 - k] == P[m - 1 - k]) k++;
+    else {
+      //BC is the preprocessing of the string P
+      int shiftbc = m - k - 1 - BC[T[i + m - 1 - k]];
+      //max(shiftbc, 1) is used for the case when the
+      //last position of the bad character is at a greater 
+      //position than the one where we found the mismatch
+      i += max(shiftbc, 1);
+      k = 0;
+    }
+  }
+  if(k == m) return i;
+  else return -1;
+}
+\end{minted}
+
+The variable \texttt{i} represents the position in \texttt{T} where it is a possible match with \texttt{P}. The variable \texttt{k} represents the number of consecutive characters in \texttt{P} (starting with the last one) that are equal to the corresponding characters in \texttt{T}. The value is increased by \(1\) if \texttt{T}[\texttt{i} + \texttt{m} - \(1\) - \texttt{k}] = \texttt{P}[\texttt{m} - \(1\) - \texttt{k}]. If the value is \texttt{m} (the length of \texttt{P}), then all of the characters match, so there is a match between \texttt{P} and \texttt{T} at position \texttt{i}. If there is a mismatch between characters, the variable \texttt{shiftbc} stores the shift between the position of the mismatch and the last position of the bad character in \texttt{P}. If \texttt{shiftbc} is negative (it cannot be \(0\) because in that case the last position of the bad character in \texttt{P} is the position of the mismatch), then the last position is to the right of the mismatch. In this case, we increment \texttt{i} by \(1\), otherwise, \texttt{i} is incremented by \texttt{shiftbc}. If the value of \texttt{i} is greater than the difference between the length of \texttt{T} and the length of \texttt{P}, then \texttt{P} is not found in \texttt{T} and \(-1\) is returned.

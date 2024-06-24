@@ -1,0 +1,762 @@
+\chapter{The Proof of the Boyer-Moore-Horspool Algorithm}
+
+\section{Defining the Global Variables}
+
+A key element in Boyer-Moore-Horspool algorithm is the \texttt{alphabet} array. All of the characters in \texttt{text} and \texttt{pattern} must be elements in this vector. In order to define it, I created a type in F* that contains the first \(2\) letters in the english alphabet.
+
+\begin{minted}{fstar}
+type english_letters = 
+  | A
+  | B
+\end{minted}
+
+After that I defined the \texttt{alphabet} array as a list that contains both of the elements in the new type created. I used a refinement type to specify that the list cannot be empty and all of the elements of type \texttt{english\_letters} are in the array.
+
+\begin{minted}{fstar}
+val alphabet : (l:list english_letters
+               {(forall (x:english_letters). mem x l = true) 
+               /\  l <> []}) 
+let alphabet = [A;B]
+\end{minted}
+
+The next two global variables are \texttt{text} and \texttt{pattern}. Like \texttt{alphabet}, each of these variables are lists of \texttt{english\_letters}. The variable \texttt{text} is a non-empty list.
+
+\begin{minted}{fstar}
+val text : (l:list english_letters{l <> []})
+let text = [A;A;A;A;B;A;A;B;A;B;A;A;A;B;A;B;B]
+\end{minted}
+
+The variable \texttt{pattern} is a list of length less or equal than the length of \texttt{text}. Based on the definition, the second list can have \(0\) elements. If we want to assign a value to a global list \texttt{l}, if the type of the list has the refinement \texttt{length l <= length text}, F* cannot prove the query if the length of \texttt{l} is greater than \(7\). \\
+\indent This happens because of the \texttt{fuel} limit, which is set by default to \(8\). The limit is used for recursive functions, in order to set the maximum number of recursive calls (including the initial call of the function) to the value of \texttt{fuel} [\(2\)]. In our case, if the length of the global list \texttt{l} is at least \(8\), the result cannot be calculated and the inequality cannot be verified. To set the value of \texttt{pattern}, we will check if the length of the value that we want to set is less or equal than the length of \texttt{text}.
+
+\begin{minted}{fstar}
+val pattern : (l:list english_letters
+               {length l <= length text}) 
+let pattern = if length [B;A;B;A;A;A;B;A;B] <= length text
+              then [B;A;B;A;A;A;B;A;B]
+              else []
+\end{minted}
+
+If we have a recursive function \texttt{f}, the \texttt{fuel} limit is applied only to this function, and not to the calls of other functions in its body. This is why the above implementation works. \\
+\indent The functions \texttt{length} and \texttt{mem} are defined in the \texttt{FStar.List.Tot.Base} library. The first function,  \texttt{length l}, returns the length of the list \texttt{l} and the second function, \texttt{mem x l}, checks if \texttt{x} is in the list \texttt{l} (\texttt{x} has the same type as the elements in \texttt{l}) [\(4\)].
+
+\section{Defining a Function that Stores a List of Indices}
+
+Some useful functions for lists are defined in the standard F* libraries. However, there was no function that returns the index where a certain element is stored in a list, so I implemented such a function, which returns a list with all of the indices where a value can be found, named \texttt{item\_indices}. The main use of \texttt{item\_indices} is for finding the last position of each value in \texttt{pattern}, which is the last element in the resulting list. 
+
+\begin{minted}{fstar}
+let rec item_indices (#a:eqtype) (item:a) (l:list a) (i:nat) 
+  : list nat 
+  = match l with   
+    | [] -> [] 
+    | hd :: tl -> if hd = item 
+                  then i :: item_indices item tl (i + 1) 
+                  else item_indices item tl (i + 1)
+\end{minted}
+
+In order to return the correct result, the parameter \texttt{i} needs to start with the value \(0\). In this way, \texttt{item\_indices} will have for each item in the list the position where it can be found. \\
+\indent The next step I did was to verify that the output data meets certain criteria. The first one is that the length of the result is equal to the number of appearances of \texttt{item} in \texttt{l}.
+
+\begin{minted}{fstar}
+let rec item_list_has_correct_length (#a:eqtype) (l:list a) 
+    (i:nat) 
+  : Lemma (ensures forall (item:a). 
+  length (item_indices item l i) = count item l) 
+  = match l with 
+    | [] -> () 
+    | hd :: tl -> item_list_has_correct_length tl (i + 1)
+\end{minted}
+
+This is a proof by induction. The base case of the lemma is when \texttt{l} is an empty list. The result of \texttt{item\_indices item l i} is also an empty list, and the length of it is \(0\). The count of any item in \texttt{l} is \(0\), since there is no element. The equality is true. The case where the list is not empty represents the inductive step. We suppose that for every natural number \texttt{j < i} the property is true and we prove the criterion for the value \texttt{i}. The following equalities hold:
+
+\begin{minted}{fstar}
+if hd = item then ( 
+  length (item_indices item l i) = 
+  1 + length (tail (item_indices item l i)) = 
+  1 + length (tail (i :: item_indices item tl (i + 1))) = 
+  1 + length (item_indices item tl (i + 1)); 
+  count item l = 1 + count item tl 
+) 
+else ( 
+  length (item_indices item l i) = 
+  length (item_indices item tl (i + 1)); 
+  count item l = count item tl 
+)
+\end{minted}
+
+The equality remains valid due to the recursive call in the lemma. After a number of steps, the recursion reaches the base case, where the property is proved. \\
+\indent The second criterion of the output data is that each value in the resulted list needs to be in the segment [\texttt{i}, \texttt{i + length l}). For this, I made another lemma. 
+
+\begin{minted}{fstar}
+let rec item_indices_is_in_interval (#a:eqtype) (item:a) 
+                                    (l:list a) (i:nat) (x:nat) 
+  : Lemma (ensures mem x (item_indices item l i) ==> 
+                   i <= x && x < i + length l) 
+  = match l with 
+    | [] -> () 
+    | hd :: tl -> item_indices_is_in_interval item tl (i + 1) x
+\end{minted}
+
+As in the previous lemma, I used a proof by induction. Here, the property is valid for an arbitrary natural number \texttt{x}. We want to prove the implication for all possible values of \texttt{x}. To achieve this, I used the \texttt{forall\_intro} function in the \texttt{FStar.Classical} library [\(3\)].
+
+\begin{minted}{fstar}
+let item_indices_is_in_interval_forall (#a:eqtype) (item:a) 
+                                       (l:list a) (i:nat)
+  : Lemma (ensures forall (x:nat). 
+           mem x (item_indices item l i) ==> 
+           i <= x && x < i + length l) 
+  = forall_intro (item_indices_is_in_interval item l i)
+\end{minted}
+
+The third thing I proved is that a certain index in the list does not store the value of the item if and only if that index is not part of \texttt{item\_indices item l 0}. The parameter \texttt{i} must be \(0\) to cover all of the indices of a list.
+
+\begin{minted}{fstar}
+let index_not_mem_not_item_not_item_not_mem 
+    (#a:eqtype) (l:list a)
+  : Lemma (ensures forall (item:a) (i:nat{i < length l}).
+           mem i (item_indices item l 0) = false <==>
+           index l i <> item)
+  = index_is_not_item_is_not_mem l;
+    index_is_not_mem_is_not_item l
+\end{minted}
+
+For the double implication to be valid, both the direct and the reciprocal have to be valid. The direct was the first verified implication.
+
+\begin{minted}{fstar}
+let rec index_is_not_mem_is_not_item_base (#a:eqtype) 
+    (l:list a) (item:a) (i:nat{i < length l})
+  : Lemma (ensures mem i (item_indices item l 0) = false ==>
+                   index l i <> item)
+  = match l with  
+    | [] -> ()
+    | hd :: tl -> 
+      match i with  
+      | 0 -> if hd = item 
+             then ()
+             else item_indices_is_in_interval item tl (i + 1) i
+      | _ -> index_is_not_mem_is_not_item_base tl item (i - 1);
+             item_indices_one_and_item_indices_zero 
+               item tl i 1
+\end{minted}
+
+The function \texttt{index} is another function in the \texttt{FStar.List.Tot.Base} library. It returns the \(n\)-th item in the list \texttt{l}. As a constraint, the value of \texttt{n} needs to be less than the length of \texttt{l}. Based on [\(4\)], the definition of the function is:
+
+\begin{minted}{fstar}
+let rec index #a (l: list a) (i:nat{i < length l}) : Tot a =
+  if i = 0 then hd l 
+  else index (tl l) (i - 1)
+\end{minted}
+
+If \texttt{i} is \(0\), then the first element of the list is returned, otherwise a recursive call is made with the list without the first element. In order to see the result of \texttt{index l i}, \texttt{i} needs to be \(0\). For that reason, if the list is not empty, we distinguish \(3\) cases: 
+\begin{enumerate}
+\item if \texttt{i = 0} and \texttt{hd = item}: in this case, \(0\) can be found in \texttt{item\_indices item l 0}, thus the first proposition of the implication is false. For that reason, the implication is true, no matter if the second proposition is true or false (in this case is false);
+\item if \texttt{i = 0} and \texttt{hd <> item}: here, the least possible value in \texttt{item\_indices item l 0} is \(1\), thus \(0\) is not part of the list;
+\item if \texttt{i > 0}: this is the inductive step. A recursive call of the function is made and a lemma is used to ensure that the tail of the index list is equal with the list from the recursive call (\texttt{mem i (item\_indices item tl 1)} and \texttt{mem (i - 1) (item\_indices item tl 0)} are equal).
+\end{enumerate}
+
+The second verified implication was the reciprocal. 
+
+\begin{minted}{fstar}
+let rec index_is_not_item_is_not_mem_base (#a:eqtype) 
+   (l:list a) (item:a) (i:nat{i < length l})
+  : Lemma (ensures index l i <> item ==>
+           mem i (item_indices item l 0) = false)
+  = match l with 
+    | [] -> ()
+    | hd :: tl -> 
+      match i with 
+      | 0 -> if hd = item 
+             then ()
+             else item_indices_is_in_interval
+                    item tl (i + 1) i
+      | _ -> if hd = item then
+             index_increases_with_one_when_first_is_item
+               item tl i
+             else
+             index_increases_with_one_when_element_is_added
+               item tl i hd;
+             index_is_not_item_is_not_mem_base 
+               tl item (i - 1)
+\end{minted}
+
+For both the direct and the reciprocal, I used \texttt{forall\_intro\_2} in order to verify the correctness of the lemmas for all possible values of \texttt{item} and \texttt{i} [\(3\)].
+
+The fourth property that ensures the correctness of the result is that a certain index in the list has the value of the item if and only if that index is part of \texttt{item\_indices item l 0}. Again, I proved this and the reciprocal and I used them to verify the double implication.
+
+\begin{minted}{fstar}
+let index_mem_item_item_mem (#a:eqtype) (l:list a)
+  : Lemma (ensures forall (item:a) (i:nat{i < length l}).
+           mem i (item_indices item l 0) = true <==>
+           index l i = item)
+  = //the direct
+    index_is_mem_is_item l;
+    //the reciprocal
+    index_is_item_is_mem l
+\end{minted}
+
+The last criterion that I verified is that \texttt{item\_indices item l 0} is in ascending order. More precisely, for any two positions in the list (if there are at least two elements), the smaller position has the smaller value. 
+
+\begin{minted}{fstar}
+let rec indices_are_ordered_in_ascending_order_base 
+    (#a:eqtype) (l:list a) (item:a) 
+    (i:nat{i < length (item_indices item l 0)}) 
+    (j:nat{j < length (item_indices item l 0)})
+  : Lemma (requires i < j)
+          (ensures
+          (let indices = item_indices item l 0 in 
+           index indices i < index indices j))
+  = match l with
+    | [] -> ()
+    | fst :: tl -> 
+      let l' = item_indices item l 0 in 
+      let l'' = item_indices item tl 1 in
+      let l''' = item_indices item tl 0 in
+      match i with 
+      | 0 -> if fst = item then (
+               mem_index_element l'' (j - 1);
+               item_indices_is_in_interval item tl 1 
+                 (index l'' (j - 1))
+             )
+             else (
+               if length l'' < 2
+               then ()
+               else (
+                 mem_index_element l' j;
+                 index_not_zero_not_first_element l item 0 j;
+                 hd_item_indices_is_min l item (index l' j) 0
+               )
+             )
+      | _ -> item_indices_zero_is_item_indices_one_minus_one
+               tl item 0;
+             assert(l''' = map subtraction l'');
+             if fst = item then (
+               assert(index l' i = index l'' (i - 1));
+               assert(index l' j = index l'' (j - 1));
+               mem_index_element l'' (i - 1);
+               mem_index_element l'' (j - 1);
+               item_map_subtraction l'' (i - 1);
+               item_map_subtraction l'' (j - 1);
+               item_indices_is_in_interval item tl 1 
+                 (index l'' (i - 1));
+               item_indices_is_in_interval item tl 1 
+                 (index l'' (j - 1));
+               assert(index l''' (i - 1) = 
+                     (index l'' (i - 1)) - 1);
+               assert(index l''' (j - 1) = 
+                     (index l'' (j - 1)) - 1);
+               indices_are_ordered_in_ascending_order_base
+                 tl item (i - 1) (j - 1)
+             )
+             else (
+               assert(index l' i = index l'' i);
+               assert(index l' j = index l'' j);
+               mem_index_element l'' i;
+               mem_index_element l'' j;
+               item_map_subtraction l'' i;
+               item_map_subtraction l'' j;
+               item_indices_is_in_interval item tl 1 
+                 (index l'' i);
+               item_indices_is_in_interval item tl 1 
+                 (index l'' j);
+               assert(index l''' i = (index l'' i) - 1);
+               assert(index l''' j = (index l'' j) - 1);
+               indices_are_ordered_in_ascending_order_base 
+                 tl item i j
+             )             
+\end{minted}
+
+Since F* complains if the parameter \texttt{i} in \texttt{index l i} is greater or equal than the length of \texttt{l}, the values of \texttt{i} and \texttt{j} have to be less than the length of \texttt{item\_indices item l 0}. For the statement to be true, it is necessary that \texttt{i} be less than \texttt{j}. The \texttt{requires} proposition and the refinements of the variables assures F* that these inequalities hold in our proof. \\
+\indent The main problem in verifying the inequality was when I made the recursive call (case where \texttt{i} was greater than \(0\)). In the new call, the indices list is \texttt{item\_indices item tl 0}, but the initial function has the indices list \texttt{item\_indices item l 0}. There was a mismatch between the inequalities: 
+
+\begin{minted}{fstar}
+//for item_indices item l 0
+let indices = item_indices item l 0 in 
+//if first element from l is equal with item
+index indices i = index (0 :: item_indices item tl 1) (i - 1)
+                = index (item_indices item tl 1) (i - 1) 
+or
+//if first element from l is not equal with item
+index indices i = index (item_indices item tl 1) i
+//the same equalities are valid for index indices j
+//in the new call of the function 
+//indices = item_indices item tl 0
+\end{minted}
+
+For the proof to be valid, I made an equality relation between elements in the lists \texttt{item\_indices item tl 0} and \texttt{item\_indices item tl 1}. The first step was writing a function that decreases by one each strictly positive natural number.
+
+\begin{minted}{fstar}
+let subtraction (i:nat) : nat 
+  = if i > 0 
+    then i - 1
+    else i
+\end{minted}
+
+Then, I verified that it gives the correct result.
+
+\begin{minted}{fstar}
+let proof_subtraction (i:nat)
+  : Lemma (ensures i > 0 ==> subtraction i = i - 1)
+  = ()
+\end{minted}
+
+The relation between the \(2\) lists is that at each position \texttt{i}, the value in the first list is the value in the second list subtracted with one. To prove this, I used the \texttt{map} function in \texttt{Fstar.List.Tot.Base} library. The function \texttt{map} has \(2\) parameters: a function \texttt{f} is applied on each element in the second parameter, a list \texttt{l}. The demonstration is for a general case, but to fit with what we need, the value of \texttt{m} has to be set to \(0\).
+
+\begin{minted}{fstar}
+let rec item_indices_zero_is_item_indices_one_minus_one 
+  (#a:eqtype) (l:list a) (item:a) (m:nat)
+  : Lemma (ensures item_indices item l m =
+           map subtraction (item_indices item l (m + 1)))
+  = match l with 
+    | [] -> ()
+    | hd :: tl -> 
+      item_indices_zero_is_item_indices_one_minus_one 
+        tl item (m + 1)
+\end{minted}
+
+Another useful property is that for \(2\) lists, \texttt{l} and \texttt{l' = map subtraction l} (the lists have the same length), and a position \texttt{i}, the value in the position \texttt{i} of the first list is smaller by \(1\) than the value in the position \texttt{i} of the second list. This is used for the indices of the inequality.
+
+\begin{minted}{fstar}
+let rec item_map_subtraction (l:list nat) 
+                             (i:nat{i < length l})
+  : Lemma (ensures 
+          (let l' = map subtraction l in
+           index l i > 0 ==> index l' i = (index l i) - 1))
+  = match l with 
+    | [] -> ()
+    | fst :: tl -> match i with  
+                   | 0 -> ()
+                   | _ -> item_map_subtraction tl (i - 1)
+\end{minted}
+
+Using the \(2\) lemmas above, we obtain the following statements:
+
+\begin{minted}{fstar}
+//relation between the 2 lists
+item_indices item tl 0 = 
+map subtraction (item_indices item tl 1);
+//relation between the 2 indices
+let indices = item_indices item tl 0 in
+let indices' = item_indices item tl 1 in
+index indices i = (index indices' i) - 1 &&
+index indices j = (index indices' j) - 1;
+//the inequality
+index indices i < index indices j ==>
+(index indices' i) - 1 < (index indices' j) - 1 ==>
+index indices' i < index indices' j
+//for (i - 1) and (j - 1) the above statements are the same
+\end{minted}
+
+Since both indices in the new call are smaller by \(1\) than the indices in the initial function, the inequality is not affected. \\ 
+\indent To verify the inequality between any \(2\) variables \texttt{i} and \texttt{j}, we need to get rid of the \texttt{requires} statement. The function \texttt{move\_requires} in the \texttt{FStar.Classical} library does that, creating an implication where the first proposition is the \texttt{requires} statement and the second proposition is the \texttt{ensures} statement [\(3\)].
+
+\begin{minted}{fstar}
+let indices_are_ordered_in_ascending_order_implication
+    (#a:eqtype) (l:list a) (item:a) 
+    (i:nat{i < length (item_indices item l 0)}) 
+    (j:nat{j < length (item_indices item l 0)})
+  : Lemma (ensures i < j ==>
+          (let indices = item_indices item l 0 in 
+           index indices i < index indices j))
+  = move_requires 
+    (indices_are_ordered_in_ascending_order_base l item i) j
+\end{minted}
+
+In the end, I used \texttt{forall\_intro\_2} to make the lemma valid for any two values \texttt{i} and \texttt{j}, both of them less than the length of \texttt{item\_indices item l 0}.
+
+\begin{minted}{fstar}
+let indices_are_ordered_in_ascending_order
+    (#a:eqtype) (l:list a) (item:a) 
+  : Lemma (ensures forall 
+          (i:nat{i < length (item_indices item l 0)}) 
+          (j:nat{j < length (item_indices item l 0)}).
+           i < j ==>
+          (let indices = item_indices item l 0 in 
+           index indices i < index indices j))
+  = forall_intro_2
+    (indices_are_ordered_in_ascending_order_implication l item) 
+\end{minted}
+
+\section{Function for Value of a Position in \texttt{bc}}
+
+In order to make the \texttt{bc} list, we need a function that computes, for any character \texttt{c}, its last position in a list \texttt{l}. The function \texttt{new\_or\_old} does that. If \texttt{item\_indices c l 0} is not an empty list, the output is the last item in \texttt{item\_indices} list (which is the last position of \texttt{c} in \texttt{l}), otherwise, the returned value is \(-1\) (\texttt{c} is not part of \texttt{l}).
+
+\begin{minted}{fstar}
+let new_or_old (#a:eqtype) (c:a) (l:list a) 
+  : int
+  = if item_indices c l 0 <> []
+    //last returnes the last value from the list
+    then last (item_indices c l 0)
+    else -1
+\end{minted}
+
+If the value returned is \(-1\), then the value of the character \texttt{c} is not in any position in the list. A lemma for an arbitrary natural number \texttt{i} (less than the length of \texttt{l}) proves this. 
+
+\begin{minted}{fstar}
+let rec new_or_old_not_item_base (#a:eqtype) (l:list a)
+        (item:a) (i:nat{i < length l})
+  : Lemma (ensures new_or_old item l = -1 ==>
+                   index l i <> item)
+  = match l with 
+    | [] -> ()
+    | hd :: tl -> 
+      match i with 
+      | 0 -> ()
+      | _ -> new_or_old_not_item_base tl item (i - 1);
+             not_new_or_old_empty_list l item;
+             empty_list_length_zero l item;
+             length_zero_count_zero l item;
+             count_zero_mem_false l item;
+             mem_false_not_item l item i
+\end{minted}
+
+For the proof, I used sublemmas for proving implications, starting from the relation \texttt{new\_or\_old item l = -1} and ending at the inequality \texttt{index l i <> item}.
+
+\begin{minted}{fstar}
+new_or_old item l = -1 ==> item_indices item l 0 = [];
+item_indices item l 0 = [] ==> 
+  length (item_indices item l 0) = 0;
+length (item_indices item l 0) = 0 ==> count item l = 0;
+count item l = 0 ==> mem item l = false;
+mem item l = false ==> index l i <> item
+\end{minted}
+
+After that, I made the lemma valid for any value \texttt{i}.
+
+\begin{minted}{fstar}
+let new_or_old_not_item (#a:eqtype) (l:list a) (item:a)
+  : Lemma (ensures forall (i:nat{i < length l}).
+           new_or_old item l = -1 ==> 
+           index l i <> item)
+  = forall_intro (new_or_old_not_item_base l item)
+\end{minted}
+
+If the value returned is not \(-1\), then it is the position in the list where the value of the character \texttt{c} is found and at any greater position a value that is not equal with the one from the character \texttt{c} is found.
+
+\begin{minted}{fstar}
+let new_or_old_not_empty_list_correct_item (#a:eqtype) 
+    (l:list a) (item:a)
+  : Lemma (requires item_indices item l 0 <> [] &&
+           last (item_indices item l 0) < length l)
+          (ensures new_or_old item l <> - 1 ==> 
+           index l (last (item_indices item l 0)) = item /\
+           (forall (i:nat{i > (last (item_indices item l 0))
+           && i < length l}). index l i <> item))
+  = new_or_old_not_empty_list l;
+    not_empty_list_mem_is_true l;
+    mem_index_is_item_gives_correct_result l item
+\end{minted}
+
+The steps I took for proving the lemma are:
+\begin{enumerate}
+\item I verified that if the result of \texttt{new\_or\_old} is not \(-1\), then the list \texttt{item\_indices item l 0} is not empty and the last element is part of it;
+\item I used the Lemma \texttt{index\_is\_mem\_is\_item} to ensure that the last element is a position where we can find the value of item in the list \texttt{l};
+\item I proved, via the fact that the indices list is in ascending order, that the last value in the indices list has the biggest value;
+\item I used the previous statement, together with the previously proved property \texttt{mem i (item\_indices item l 0) = false ==> index l i <> item} for all values of \texttt{i}, to prove that for every value greater than the last one in the indices list, if it is a position from the \texttt{l} list, then the value stored is not equal with \texttt{item};
+\item I combined the results in \(2\) and \(4\).
+\end{enumerate}
+
+For our problem, \texttt{new\_or\_old} takes as parameters a character in \texttt{alphabet} and the \texttt{pattern} list.
+
+\section{Verifying the Correctness of the Updated \texttt{bc}}
+
+The last step of preprocessing the \texttt{pattern} list is to update the positions in the bad character array. I made a general function which does the preprocessing of an arbitrary list \texttt{p} (of type \texttt{english\_letters}) given an arbitrary list \texttt{a} as alphabet (of type \texttt{english\_letters}). For each value \texttt{hd} in \texttt{a}, \texttt{new\_or\_old hd p} is applied.
+
+\begin{minted}{fstar}
+let rec update_bc (a:list english_letters) 
+                  (p:list english_letters)
+  : list int
+  = match a with 
+    | [] -> []
+    | hd :: tl -> (new_or_old hd p) :: update_bc tl p
+\end{minted}
+
+One important thing about the output of \texttt{update\_bc} is to have the same length as the length of \texttt{a}. Thus, each integer in the result has a correspondent in \texttt{a}.
+
+\begin{minted}{fstar}
+let rec update_bc_length_is_initial_list_length
+    (l:list english_letters) (p:list english_letters)
+    : Lemma (ensures length (update_bc l p) = length l)
+    = match l with
+      | [] -> ()
+      | hd :: tl -> update_bc_length_is_initial_list_length
+                    tl p
+\end{minted}
+
+The other criteria that needs to be fulfilled by the output list are proved with the help of the properties in \texttt{new\_or\_old}:
+\begin{enumerate}
+\item If on a position \texttt{i} the value is \(-1\), then the value in the position \texttt{i} of \texttt{a} is not found in \texttt{p};
+\begin{minted}{fstar}
+let rec update_bc_for_minusone_base 
+        (l:list english_letters)
+        (p:list english_letters)
+        (i:nat{i < length l && 
+               i < length (update_bc l p)})
+        (j:nat{j < length p})
+  : Lemma (ensures
+          (let l' = update_bc l p in
+           index l' i = -1 ==>
+           index p j <> index l i))
+  = update_bc_length_is_initial_list_length l p;
+    match l with 
+    | [] -> ()
+    | fst :: tl -> 
+      match i with 
+      | 0 -> assert(update_bc l p = (new_or_old fst p)
+                    :: update_bc tl p);
+             assert(index (update_bc l p) i = 
+                    new_or_old fst p);
+             assert(fst = index l i);
+             new_or_old_not_item_base p fst j;
+             assert(new_or_old fst p = -1 ==>
+                    index p j <> fst)
+      | _ -> update_bc_for_minusone_base 
+             tl p (i - 1) j
+\end{minted}
+\item If on a position \texttt{i} the value is \texttt{x <> -1}, then, for the value in the position \texttt{i} of \texttt{a}, \texttt{x} is the last position in \texttt{p};
+\begin{minted}{fstar}
+let rec update_bc_for_nat_base (l:list english_letters)
+        (p:list english_letters)
+        (i:nat{i < length l &&
+               i < length (update_bc l p)})
+        (j:nat{j < length p})
+  : Lemma (ensures 
+          (let l' = update_bc l p in
+           index l' i = j ==> index p j = index l i /\
+           (forall (i':nat{i' > j && i' < length p}).
+            index p i' <> index l i)))
+  = update_bc_length_is_initial_list_length l p;
+    match l with 
+    | [] -> ()
+    | fst :: tl ->
+      match i with 
+      | 0 -> assert(update_bc l p = (new_or_old fst p)
+                    :: update_bc tl p);
+             assert(index (update_bc l p) i =
+                    new_or_old fst p);
+             assert(fst = index l i);
+             if j = new_or_old fst p then (
+               if item_indices (index l i) l 0 <> [] 
+               then (
+                 item_indices_is_in_interval (index l i)
+                   l 0
+                   (last (item_indices (index l i) l 0));
+                 new_or_old_not_empty_list_correct_item
+                   p fst
+               )
+               else ()
+             )
+             else ()
+      | _ -> update_bc_for_nat_base tl p (i - 1) j
+\end{minted}
+\item Any value in the returned list is either \(-1\) or a natural number, less than the length of \texttt{p}.
+\begin{minted}{fstar}
+let rec update_bc_has_values_in_interval
+        (l:list english_letters)
+        (p:list english_letters)
+        (i:nat{i < length (update_bc l p)})
+  : Lemma (ensures (let l' = update_bc l p in
+           index l' i = -1 ||
+           (index l' i >= 0 && index l' i < length p)))
+  = match l with
+    | [] -> ()
+    | fst :: tl -> 
+        if i = 0 then
+        new_or_old_return_values p fst
+        else update_bc_has_values_in_interval tl p (i - 1)
+\end{minted}
+\end{enumerate}
+
+The updated \texttt{bc} list which will be used in the main algorithm is the result of the function \texttt{update\_bc alphabet pattern}.
+
+\begin{minted}{fstar}
+let final_bc : list int 
+  = update_bc alphabet pattern
+\end{minted}
+
+Since the criteria have been proved for \(2\) arbitrary lists \texttt{a} and \texttt{p}, to make them valid for \texttt{final\_bc} we just have to use the lemmas with the parameters \texttt{alphabet} and \texttt{pattern}.
+
+\section{Specifying the Main Algorithm}
+
+To specify the main algorithm, I made a function that checks if a substring \texttt{p} is part of a string \texttt{t}.
+To be possible, the length of \texttt{p} needs to be less or equal to the length of \texttt{t}.
+
+\begin{minted}{fstar}
+let rec belongs (t:list english_letters)
+        (p:list english_letters{length p <= length t})
+        (i:nat)
+  : bool
+  = match p with
+    | [] -> true
+    | hd :: tl -> if i < length t && hd = index t i 
+                  then belongs t tl (i + 1)
+                  else false
+\end{minted}
+
+The Boyer-Moore-Horspool algorithm has \(4\) parameters:
+\begin{enumerate}
+\item \texttt{t} - a list of type \texttt{english\_letters}, represents the text string;
+\item \texttt{p} - a list of type \texttt{english\_letters} with the length less or equal than the length of \texttt{t}, is the pattern string;
+\item \texttt{k} - a natural number with the value less or equal than the length of \texttt{p}, used to store the number of characters that match between \texttt{t} and \texttt{p};
+\item \texttt{i} - a natural number, used to store the starting position of a possible match between \texttt{t} and \texttt{p}.
+\end{enumerate}
+
+To ensure that the function is total, one parameter needs to decrease at each recursive call. Since the starting values of \texttt{k} and \texttt{i} are \(0\) and none of them decreases (either \texttt{k} is increased by \(1\) or \texttt{i} is increased by a shift value), the decreasing values are \texttt{length t- length p + 1 - i} and \texttt{length p - k}. To prove the termination of the algorithm, the two values needs to be specified in the \texttt{decreases} statement.
+
+\section{Implementing the Main Algorithm}
+
+The implementation of the main algorithm in F* is:
+
+\begin{minted}{fstar}
+let rec boyer_moore_horspool (t:list english_letters)
+        (p:list english_letters{length p <= length t})
+        (k:nat{k <= length p}) (i:nat)
+  : Tot (result:int{result >= -1})
+  (decreases %[(if i < length t - length p + 1 then
+                length t - length p + 1 - i else 0);
+                length p - k])
+  = let m = length p in
+    let n = length t in
+    if k = m then i
+    else if i > n - m then -1
+    else (
+      if index t (i + m - 1 - k) = index p (m - 1 - k)
+      then boyer_moore_horspool t p (k + 1) i
+      else (
+        update_bc_length_is_initial_list_length alphabet p;
+        mem_last_list (item_indices (index t (i + m - 1 - k))
+                       alphabet 0);
+        item_indices_is_in_interval_forall alphabet 0
+           (index t (i + m - 1 - k));
+        let shiftbc = m - k - 1 - 
+          index (update_bc alphabet p) (last (item_indices
+          (index t (i + m - 1 - k)) alphabet 0)) in
+        let value = i + (maximum 1 shiftbc) in
+        boyer_moore_horspool t p 0 value
+      )
+    )
+\end{minted}
+
+If \texttt{p} is not a substring of \texttt{t}, then \texttt{boyer\_moore\_horspool} returns \(-1\), otherwise, it returns the first position in \texttt{t} where we can find \texttt{p}. To verify this, I checked \(3\) properties about the algorithm:
+\begin{enumerate}
+\item If, for \texttt{boyer\_moore\_horspool t p k i}, the last \texttt{k} indices in \texttt{p} and \texttt{t} are equal and the indices in this function are also equal, then the recursive call of the function is \texttt{boyer\_moore\_horspool t p (k + 1) i} and the last \texttt{(k + 1)} indices in \texttt{p} and \texttt{t} are equal (it is possible that the equality between the indices in \texttt{boyer\_moore\_horspool t p k i} to be false and the returned value to be the same as the output of \texttt{boyer\_moore\_horspool t p (k + 1) i});
+\item If, for all natural numbers \texttt{j} less than an arbitrary natural number \texttt{i} (which is less or equal than \texttt{length t - length p}), \texttt{boyer\_moore\_horspool t p 0 j} is not equal to \texttt{j}, then none of these \texttt{j} values are the positions where we can find the substring \texttt{p} in \texttt{t};
+\item If, for \texttt{boyer\_moore\_horspool t p k i}, \texttt{i} is incremented by \texttt{shiftbc} (or by \(1\)), then for all values \texttt{i'} in the segment [\texttt{i}, \texttt{i + maximum shiftbc 1}), \texttt{i'} is not the position in \texttt{t} where the substring \texttt{p} is found(in other words, \texttt{belongs t p i' = false}). The function \texttt{belongs t p i} is false if there exists a natural number \texttt{j} in the segment [\texttt{i}, \texttt{i + length p}) such that \texttt{index t j <> index p (j - i)}. We know that none of the natural numbers in the segment [\(0\), \texttt{i - 1}] are the position where we can find \texttt{p} in \texttt{t}, the last \texttt{k} characters in \texttt{p} are equal to characters in \texttt{t} and \texttt{t[i + m - 1 - k] <> p[m - 1 - k]}. Since \texttt{k} is reset to \(0\), not all of the characters in \texttt{p} match with characters in \texttt{t} and the first string is shifted. If \texttt{p} is shifted by \(1\), the only possible value of \texttt{i'} is \texttt{i}, where we already know that \texttt{belongs} statement is false. Otherwise, we use the properties from \texttt{item\_indices} and \texttt{update\_bc}. Let us have \texttt{a = last (item\_indices (index t (i + m - 1 - k)) alphabet 0)} and \texttt{b = index (update\_bc alphabet p) a}. Since \texttt{b} is an element in the list \texttt{update\_bc alphabet p}, its value is either \(-1\) or a value in the segment [\(0\), \texttt{length p}). In both cases, \texttt{a} is the index in \texttt{alphabet} where the bad character is stored (so its equal to \texttt{index t (i + m - 1 - k)}). If \texttt{b} is equal to \(-1\), then no character in \texttt{p} is equal to the bad character. The shift is made to the position that is just after the position of the bad character. For all of the positions \texttt{i'}, there will be a mismatch. If \texttt{b} is not \(-1\), then it is the last position of the bad character and for all values from the segment (\texttt{b}, \texttt{length p}), the bad character is not found. For all of the positions \texttt{i'}, the difference \texttt{i' - i} is in the segment [\(0\), \texttt{shiftbc}), so the inequality \texttt{length p - 1 - k - (i' - i) > length p - 1 - k - shiftbc} is true. Since \(1\), \texttt{k} and \texttt{(i' - i)} are positive numbers, the result \texttt{length p - 1 - k - (i' - i)} is less than \texttt{length p}. The relation \texttt{length p - 1 - k - (i' - i)} can be written as \texttt{i + length p - 1 - k - i'}. This, combined with the property of \texttt{belongs} described above, proves that this case is valid. 
+\end{enumerate}
+
+\section{Proving the Correctness of the Main Algorithm}
+
+These \(3\) statements helped me in verifying if the output data in the algorithm is correct for all cases.
+
+\begin{minted}{fstar}
+let rec bmh_gives_correct_result 
+    (t:list english_letters) 
+    (p:list english_letters{length p <= length t})
+    (k:nat{k <= length p})
+    (i:nat{i <= length t - length p})
+  : Lemma (requires
+          (forall (i':nat{i' < i}). belongs t p i' = false)
+          /\ (forall (k':nat{k' < k}). 
+          index t (i + length p - 1 - k') = 
+          index p (length p - 1 - k')))
+          (ensures 
+          (let x = boyer_moore_horspool t p k i in 
+           x <> -1 ==> belongs t p x = true))
+          (decreases %[(if i < length t - length p + 1 then
+           length t - length p + 1 - i else 0); 
+           length p - k])
+  = let m = length p in
+    if k = m then (
+      assert(forall (k':nat{k' < m}).
+            index t (i + m - 1 - k') = index p (m - 1 - k'));
+      indices_are_equal_belongs_true_base t p i;
+      convert_from_x_to_j p i
+    )
+    else (
+     if index t (i + m - 1 - k) = index p (m - 1 - k) then (
+        zero_to_k_then_all_indices_are_equal t p k i;
+        bmh_gives_correct_result t p (k + 1) i
+      )
+      else (
+        update_bc_length_is_initial_list_length alphabet p;
+        mem_last_list (item_indices (index t (i + m - 1 - k))
+                       alphabet 0);
+        item_indices_is_in_interval_forall alphabet 0
+           (index t (i + m - 1 - k));
+        let shiftbc = m - k - 1 - index 
+          (update_bc alphabet p) (last (item_indices 
+          (index t (i + m - 1 - k)) alphabet 0)) in
+        let value = i + (maximum 1 shiftbc) in 
+        if value > length t - m then ()
+        else (
+          bmh_belongs_false_if_less_than_shiftbc_forall
+            t p k i;
+          bmh_gives_correct_result t p 0 value
+        )
+      )
+    )
+
+let rec bmh_gives_minus_one_belongs_false
+    (t:list english_letters) 
+    (p:list english_letters{length p <= length t})
+    (k:nat{k <= length p})
+    (i:nat{i <= length t - length p})
+  : Lemma (requires
+          (forall (i':nat{i' < i}). belongs t p i' = false)
+          /\ (forall (k':nat{k' < k}). 
+          index t (i + length p - 1 - k') = 
+          index p (length p - 1 - k')))
+          (ensures 
+          (let x = boyer_moore_horspool t p k i in 
+           x = -1 ==> 
+           (forall (y:nat{y <= length t - lenght p}).
+           belongs t p y = false)))
+          (decreases %[(if i < length t - length p + 1 then
+           length t - length p + 1 - i else 0); length p - k])
+  = let m = length p in
+    if k = m then ()
+    else (
+     assert(k < m);
+     if index t (i + m - 1 - k) = index p (m - 1 - k) then (
+        zero_to_k_then_all_indices_are_equal t p k i;
+        bmh_gives_minus_one_belongs_false t p (k + 1) i
+      )
+      else (
+        update_bc_length_is_initial_list_length alphabet p;
+        mem_last_list (item_indices (index t (i + m - 1 - k))
+                       alphabet 0);
+        item_indices_is_in_interval_forall alphabet 0
+           (index t (i + m - 1 - k));
+        let shiftbc = m - k - 1 - index 
+          (update_bc alphabet p) (last (item_indices 
+          (index t (i + m - 1 - k)) alphabet 0)) in
+        let value = i + (maximum 1 shiftbc) in
+        bmh_belongs_false_if_less_than_shiftbc_forall
+          t p k i;
+        if value > length t - m then ()
+        else bmh_gives_minus_one_belongs_false 
+             t p 0 value
+      )
+    )
+\end{minted}
+
+The proofs are for arbitrary parameters. For our algorithm to be correct, the input values are \texttt{text} for \texttt{t}, \texttt{pattern} for \texttt{p}, \(0\) for \texttt{k} and \(0\) for \texttt{i}. The above \(2\) lemmas are used to verify the properties for these inputs.
+
+\begin{minted}{fstar}
+let bmh_gives_correct_result_for_text_and_pattern ()
+  : Lemma (ensures 
+          (let x = boyer_moore_horspool text pattern 0 0 in
+           x <> -1 ==> belongs text pattern x = true))
+  = assert(0 <= length text - length pattern);
+    bmh_gives_correct_result text pattern 0 0
+
+let 
+bmh_gives_minus_one_belongs_false_for_text_and_pattern 
+() : Lemma (ensures 
+          (let x = boyer_moore_horspool text pattern 0 0 in
+          x = -1 ==> (forall 
+          (y:nat{y <= length text -length pattern}).
+          belongs text pattern y = false)))
+  = bmh_gives_minus_one_belongs_false text pattern 0 0
+\end{minted}
+
+With these proofs, the verification of Boyer-Moore-Horspool is done. The algorithm gives the desired output for any case.

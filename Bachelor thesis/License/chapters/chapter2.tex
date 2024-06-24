@@ -1,0 +1,18 @@
+\chapter{The F* Language}
+
+F* is a proof-oriented programming language. It can be used as a proof assistant and as a verification engine, in order to verify logical or mathematical relations. To do that, F* uses the SMT solver Z\(3\). However, the language still needs a little help from the programmer to ensure certain statements. Another role of the language is as a compiler. It is possible to have functions with effects such as printing on the screen an output value. To see the result, we need an executable file. We cannot make an executable file in an F* file, but we can compile the F* file, translate it to OCaml and make an executable file in the OCaml file [\(2\)].
+
+\section{Lemmas and Refinements}
+
+A Lemma is a special function from the F* language. It has as output data the unit value and one or more statements within the value, which represents properties that we want to prove. If the proof was verified and no errors were given, then the proof is valid [\(2\)]. The lemmas can be proved by F* directly or with the help of assertions, sublemmas or induction. For the last part, the lemma is a recursive function with a base case and an inductive step. Refinements are another important component of F*. They are used to set restrictions for certain variables. For example, if you have a function with a natural number \texttt{i} as parameter and you want to ensure that \texttt{i} is in a segment [\texttt{a},\texttt{b}] (\texttt{a} and \texttt{b} are natural numbers, with \texttt{a} less than \texttt{b}), you can set the restriction with a refinement: \texttt{(i:nat\{i >= a \&\& i <= b\})}.
+
+\section{Useful Instructions}
+
+Besides the components described above, for proving the algorithm, \(3\) instructions helped me in finding a solution for an incomplete proof:
+\begin{enumerate}
+\item \texttt{assert()} - the instruction was very useful for testing what statement is needed in order for the proof to be complete or to reformulate statements or mathematical operations in a way that F* can understand;
+\item \texttt{assume()} - when a certain proposition was not valid, I used \texttt{assume()} to verify if that proposition was the reason why the lemma was not provable;
+\item \texttt{admit()} - for a proof by induction or for an if statement, \texttt{admit()} helped me in finding the part of the function which didn't had enough data for making the proof valid.
+\end{enumerate}
+
+The only one instruction present in the proofs is assert.
