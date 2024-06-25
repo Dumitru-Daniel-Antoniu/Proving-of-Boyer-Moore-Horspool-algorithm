@@ -1021,36 +1021,36 @@ let h_has_correct_indices_stored_other ()
   : Lemma (ensures forall (i:nat{i < length g}). length g = length h ==> index h i = index g (length g - 1 - i))
   = reverse_stores_correct_values_other g
 
-let first_characters_l_is_last_characters_reverse_l_base (l:list english_letters{l <> []}) (i:nat{i > 0 && i <= length l})
-  : Lemma (requires length l = length (reverse l))
-          (ensures first_characters l i = reverse (last_characters (reverse l) i))
-  = reverse_length_is_l_length l;
-    length_first_characters_i_is_i l i;
-    length_last_characters_i_is_i (reverse l) i;
-    reverse_length_is_l_length (last_characters (reverse l) i);
-    assert(length (last_characters (reverse l) i) = i);
-    assert(length (reverse (last_characters (reverse l) i)) = i);
-    assert(length (first_characters l i) = length (reverse (last_characters (reverse l) i)));
-    reverse_stores_correct_values l;
-    assert(forall (j:nat{j < length l}). index l j = index (reverse l) (length l - 1 - j));
-    first_characters_stores_indices_correctly l i;
-    assert(forall (j:nat{j < i}). index (first_characters l i) j = index l j);
-    assert(forall (j:nat{j < i}). index (first_characters l i) j = index (reverse l) (length l - 1 - j));
-    last_characters_stores_indices_correctly (reverse l) i;
-    assert(forall (j:nat{j < i}). index (last_characters (reverse l) i) j = index (reverse l) (length l - i + j));
-    reverse_stores_correct_values_other (last_characters (reverse l) i);
-    assert(forall (j:nat{j < i}). index (reverse (last_characters (reverse l) i)) j = index (last_characters (reverse l) i) (i - 1 - j));
-    compare_lists_equal_both_parts (first_characters l i) (reverse (last_characters (reverse l) i))
+// let first_characters_l_is_last_characters_reverse_l_base (l:list english_letters{l <> []}) (i:nat{i > 0 && i <= length l})
+//   : Lemma (requires length l = length (reverse l))
+//           (ensures first_characters l i = reverse (last_characters (reverse l) i))
+//   = reverse_length_is_l_length l;
+//     length_first_characters_i_is_i l i;
+//     length_last_characters_i_is_i (reverse l) i;
+//     reverse_length_is_l_length (last_characters (reverse l) i);
+//     assert(length (last_characters (reverse l) i) = i);
+//     assert(length (reverse (last_characters (reverse l) i)) = i);
+//     assert(length (first_characters l i) = length (reverse (last_characters (reverse l) i)));
+//     reverse_stores_correct_values l;
+//     assert(forall (j:nat{j < length l}). index l j = index (reverse l) (length l - 1 - j));
+//     first_characters_stores_indices_correctly l i;
+//     assert(forall (j:nat{j < i}). index (first_characters l i) j = index l j);
+//     assert(forall (j:nat{j < i}). index (first_characters l i) j = index (reverse l) (length l - 1 - j));
+//     last_characters_stores_indices_correctly (reverse l) i;
+//     assert(forall (j:nat{j < i}). index (last_characters (reverse l) i) j = index (reverse l) (length l - i + j));
+//     reverse_stores_correct_values_other (last_characters (reverse l) i);
+//     assert(forall (j:nat{j < i}). index (reverse (last_characters (reverse l) i)) j = index (last_characters (reverse l) i) (i - 1 - j));
+//     compare_lists_equal_both_parts (first_characters l i) (reverse (last_characters (reverse l) i))
 
-let first_characters_l_is_last_characters_reverse_l_implication (l:list english_letters{l <> []}) (i:nat{i > 0 && i <= length l})
-  : Lemma (ensures length l = length (reverse l) ==> first_characters l i = reverse (last_characters (reverse l) i))
-  = reverse_length_is_l_length l;
-    move_requires (first_characters_l_is_last_characters_reverse_l_base l) i
+// let first_characters_l_is_last_characters_reverse_l_implication (l:list english_letters{l <> []}) (i:nat{i > 0 && i <= length l})
+//   : Lemma (ensures length l = length (reverse l) ==> first_characters l i = reverse (last_characters (reverse l) i))
+//   = reverse_length_is_l_length l;
+//     move_requires (first_characters_l_is_last_characters_reverse_l_base l) i
 
-let first_characters_l_is_last_characters_reverse_l (l:list english_letters{l <> []}) 
-  : Lemma (ensures forall (i:nat{i > 0 && i <= length l}). 
-           length l = length (reverse l) ==> first_characters l i = reverse (last_characters (reverse l) i))
-  = forall_intro (first_characters_l_is_last_characters_reverse_l_implication l)
+// let first_characters_l_is_last_characters_reverse_l (l:list english_letters{l <> []}) 
+//   : Lemma (ensures forall (i:nat{i > 0 && i <= length l}). 
+//            length l = length (reverse l) ==> first_characters l i = reverse (last_characters (reverse l) i))
+//   = forall_intro (first_characters_l_is_last_characters_reverse_l_implication l)
 
 
 
