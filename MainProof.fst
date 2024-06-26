@@ -1,5 +1,7 @@
 module MainProof
 
+//this is the proof for the entire algorithm in one file
+//the other files combined gives the exact code as the code in this file
 open FStar.Classical 
 open FStar.IO
 open FStar.Printf
