@@ -1,4 +1,4 @@
-This is my bachelor thesis, where I implemented and I verified the Boyer-Moore-Horspool algorithm in F*. The thesis is divided in the following files:
+This is my bachelor thesis, where I implemented and I verified the Boyer-Moore-Horspool algorithm in F*. The thesis is divided in the following files: \\
 1)GlobalData.fst - the file where I described the input data for the algorithm;
 2)ItemIndices.fst - a function for returning a list with the indices where a certain value occurs in a list;
 3)NewOrOld.fst - a function that returns -1 if a character is not in a list, and the last position of the character in the list otherwise;
