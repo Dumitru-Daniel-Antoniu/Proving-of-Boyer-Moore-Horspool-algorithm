@@ -1,3 +1,5 @@
+## Proving of Boyer-Moore-Horspool algorithm
+
 This is my bachelor thesis, where I implemented and I verified the Boyer-Moore-Horspool algorithm in F*. The thesis is divided in the following files: <br />
 1)GlobalData.fst - the file where I described the input data for the algorithm; <br />
 2)ItemIndices.fst - a function for returning a list with the indices where a certain value occurs in a list; <br />
