@@ -9,4 +9,5 @@ This is my bachelor thesis, where I implemented and I verified the Boyer-Moore-H
 * BoyerMooreHorspool.fst - the main algorithm; <br />
 * Main.fst - the file where the instructions for printing the result are written; <br />
 * MainProof.fst - this file contains all of the code from the previous files put together. <br />
+
 All of the functions in these files contains proofs of certain criteria. Except MainProof.fst, all of the files have also a .checked file generated.
